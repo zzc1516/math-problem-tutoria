@@ -218,10 +218,10 @@ button{font-family:inherit}
   flex:1;
   min-height:0;
 }
-.stage-col{display:flex;flex-direction:column;gap:12px;min-width:0}
+.stage-col{display:flex;flex-direction:column;gap:12px;min-width:0;min-height:0}
 
 /* ---------------- 舞台 ---------------- */
-.stage{display:flex;flex-direction:column;min-height:380px;overflow:hidden}
+.stage{display:flex;flex-direction:column;flex:1 1 auto;min-height:320px;overflow:hidden}
 .stage-body{position:relative;flex:1;display:flex;min-height:0}
 .narration{
   position:absolute;left:18px;top:14px;z-index:3;max-width:min(440px,74%);
@@ -245,7 +245,11 @@ button{font-family:inherit}
   font-size:11.5px;font-weight:700;letter-spacing:.3px;color:var(--brand-deep);
   background:var(--brand-soft);border:1px solid #FFDCCB;border-radius:999px;padding:3px 10px;flex:none;
 }
-#stageTitle{font-size:16px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#stageTitle{
+  font-size:16px;font-weight:700;min-width:0;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+  overflow:hidden;line-height:1.35;
+}
 .stage-meta{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 .tag{
   font-size:11.5px;color:#67757F;background:#F5F1EA;border-radius:8px;padding:3px 8px;
@@ -266,7 +270,7 @@ button{font-family:inherit}
   min-height:230px;
   display:flex;align-items:center;justify-content:center;
 }
-.svg-host svg{width:100%;height:100%;display:block;overflow:visible}
+.svg-host svg{position:absolute;inset:0;width:100%;height:100%;display:block;overflow:visible}
 
 .empty-state{text-align:center;padding:20px;max-width:440px}
 .empty-art{margin-bottom:10px;opacity:.9}
@@ -278,6 +282,11 @@ button{font-family:inherit}
   font-size:12.5px;color:var(--muted);border-top:1px solid var(--line-2);min-height:0;
 }
 .stage-foot:empty{display:none}
+.foot-note{
+  flex-basis:100%;font-size:12px;color:var(--muted);line-height:1.55;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+  margin-bottom:2px;
+}
 .formula-chip{
   font-family:var(--mono);font-size:13px;color:#1F5E86;background:var(--blue-soft);
   border:1px solid #CCE7F7;border-radius:9px;padding:3px 9px;letter-spacing:.2px;
@@ -479,7 +488,7 @@ input[type=range]{width:100%;accent-color:var(--brand)}
 .dg .shape{transition:filter .3s ease, opacity .3s ease}
 .dg .el{transition:opacity .35s ease, filter .35s ease, transform .45s cubic-bezier(.4,0,.2,1);transform-box:fill-box}
 .dg .el.hidden{opacity:0 !important;pointer-events:none}
-.dg .el.dim{opacity:.26;filter:saturate(.35)}
+.dg .el.dim{opacity:.42;filter:saturate(.55)}
 .dg .el.focus{filter:drop-shadow(0 0 9px rgba(255,107,53,.75));opacity:1}
 .dg .el.pulse{animation:svgPulse 1.1s ease 2}
 @keyframes svgPulse{0%,100%{filter:none}50%{filter:drop-shadow(0 0 14px rgba(255,107,53,.9))}}

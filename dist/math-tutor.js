@@ -741,7 +741,8 @@ G. 认知顺序走 CPA：先具体（钱、格子、路程）→ 再图示（线
 8. 先在心里把答案算准，再组织步骤；拿不准就换一种更简单的算法，绝不编造。
 9. 图解要服务于理解：线段图看份数，天平看等量关系，面积图看公式从哪来。
 10. 题目以图片给出时：先看清图上的数字、单位、图形标注再动笔；几何题必须按图上给的数据画图，
-    并把"这个数是从图上哪里看到的"讲出来；看不清就别猜，写进 warning。`;
+    并把"这个数是从图上哪里看到的"讲出来；看不清就别猜，写进 warning。
+11. meta.note 只写一句话、不超过 30 个字（会被显示在图下方的一行说明里）。`;
 
   const GRADE_RULES = `## 年级适配（meta.grade）
 一年级：只用图形和实物图，不出现分数、小数、字母、乘除算式，用「合起来 / 拿走 / 还剩」表达。
@@ -1138,6 +1139,57 @@ text 里不要用 Markdown，不要超过 90 个字。`;
     warning: ''
   };
 
+  /* 简易方程：天平图 + 等式性质 */
+  const equation = {
+    meta: { topic: '简易方程 · 逆推', grade: 5, method: 'equation', unit1: false, unit1Used: false, gradeFit: 'ok', note: '' },
+    problem: {
+      text: '一个数的 3 倍再加上 5，结果是 26。这个数是多少？',
+      givens: [{ name: '某个数', value: 'x', unit: '' }],
+      question: '这个数是多少？'
+    },
+    plan: { headline: '设这个数为 x，把题目的意思写成等式', relation: '3x + 5 = 26' },
+    diagram: {
+      type: 'balance', title: '天平：两边一样重', hint: '左边和右边一样重',
+      left: { label: '3x + 5', items: [{ id: 'l1', text: '3 个 x' }, { id: 'l2', text: '+ 5' }] },
+      right: { label: '26', items: [{ id: 'r1', text: '26' }] }
+    },
+    steps: [
+      {
+        phase: '理解', title: '把话翻译成式子',
+        text: '不知道的这个数，我们就叫它 x。它的 3 倍再加 5，等于 26。',
+        math: '', why: '用字母代替不知道的数，题目就变成了一道等式。',
+        ops: [{ op: 'focus', ids: ['l1', 'l2'], text: '3x + 5' }]
+      },
+      {
+        phase: '关系', title: '天平要保持平衡',
+        text: '左边是 3x + 5，右边是 26，两边一样重。',
+        math: '3x + 5 = 26', why: '等号就像天平，两边同时做同样的事，天平还是平的。',
+        ops: [{ op: 'focus', ids: ['l1', 'l2', 'r1'], text: '两边相等' }]
+      },
+      {
+        phase: '列式', title: '两边同时减去 5',
+        text: '左边去掉 5，右边也去掉 5，剩下 3x = 21。',
+        math: '26 - 5 = 21', why: '要把 5 抵消掉，就得两边同时减 5。',
+        ops: [{ op: 'hide', ids: ['l2'] }, { op: 'set', id: 'r1', text: '21' }, { op: 'focus', ids: ['r1'], text: '26 − 5 = 21' }]
+      },
+      {
+        phase: '计算', title: '两边同时除以 3',
+        text: '3 个 x 是 21，那 1 个 x 就是 21 ÷ 3 = 7。',
+        math: '21 / 3 = 7', why: '3 份是 21，求 1 份就用除法。',
+        ops: [{ op: 'set', id: 'l1', text: 'x = 7' }, { op: 'focus', ids: ['l1'], text: 'x 就是 7' }, { op: 'mark', id: 'l1', text: '✓' }]
+      },
+      {
+        phase: '检验', title: '代回去看看',
+        text: '3 × 7 + 5 = 26，正好等于题目说的结果。',
+        math: '3 * 7 + 5 = 26', why: '把 x = 7 放回原式，等式成立就说明解对了。',
+        ops: [{ op: 'focus', ids: ['l1', 'r1'], text: '两边都成立' }, { op: 'pulse', ids: ['l1', 'r1'] }]
+      }
+    ],
+    answer: { value: '7', unit: '', sentence: '这个数是 7。' },
+    checks: ['26 - 5 = 21', '21 / 3 = 7', '3 * 7 + 5 = 26'],
+    warning: ''
+  };
+
   const examples = [
     { label: '分数 · 单位1', grade: 6, text: '小明有 48 元，小红的钱是小明的 3/4，两个人一共有多少元？' },
     { label: '和差问题', grade: 4, text: '甲、乙两盒共有 48 张卡片，甲盒比乙盒多 12 张。两盒各有多少张卡片？' },
@@ -1150,7 +1202,7 @@ text 里不要用 Markdown，不要超过 90 个字。`;
     { label: '浓度问题', grade: 6, text: solution.problem.text }
   ];
 
-  MT.demo = { lessons: [demo, discount, solution], examples };
+  MT.demo = { lessons: [demo, discount, solution, equation], examples };
 })();
 
 
@@ -1799,50 +1851,57 @@ ${answerMsg}
   function renderBalance(spec, reg) {
     const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'dg' });
     title(svg, spec.title || '天平');
-    const cx = W / 2, beamY = 250;
+    const cx = W / 2, beamY = 172;
 
-    const beamGroup = s('g', { class: 'el', 'data-id': 'beam', style: 'transform-origin:0 0' });
+    const beamGroup = s('g', { class: 'el', 'data-id': 'beam' });
     reg.beam = beamGroup;
-    let tilt = 0;
     beamGroup._special = (v) => {
-      tilt = v === 'left' ? -4 : v === 'right' ? 4 : 0;
-      beamGroup.setAttribute('transform', `rotate(${tilt} ${cx} ${beamY})`);
+      const deg = v === 'left' ? -4 : v === 'right' ? 4 : 0;
+      beamGroup.setAttribute('transform', `rotate(${deg} ${cx} ${beamY})`);
     };
 
+    // 横梁 + 支点
     beamGroup.appendChild(s('rect', { x: cx - 250, y: beamY - 7, width: 500, height: 14, rx: 7, fill: '#F0B23C' }));
     beamGroup.appendChild(s('circle', { cx, cy: beamY, r: 13, fill: '#D98F1C' }));
-    beamGroup.appendChild(s('path', { d: `M${cx} ${beamY + 10} L${cx} ${beamY + 66}`, stroke: '#B8801C', 'stroke-width': 10, 'stroke-linecap': 'round' }));
-    beamGroup.appendChild(s('path', { d: `M${cx - 58} 400 L${cx + 58} 400 L${cx} ${beamY + 66} Z`, fill: '#F6C765', stroke: '#D98F1C', 'stroke-width': 2, 'stroke-linejoin': 'round' }));
-    beamGroup.appendChild(s('rect', { x: cx - 84, y: 398, width: 168, height: 14, rx: 7, fill: '#E8B24A' }));
+    beamGroup.appendChild(s('path', { d: `M${cx} ${beamY + 10} L${cx} ${beamY + 196}`, stroke: '#C08A22', 'stroke-width': 9, 'stroke-linecap': 'round' }));
+    beamGroup.appendChild(s('path', { d: `M${cx - 62} ${beamY + 250} L${cx + 62} ${beamY + 250} L${cx} ${beamY + 196} Z`, fill: '#F6C765', stroke: '#D98F1C', 'stroke-width': 2, 'stroke-linejoin': 'round' }));
+    beamGroup.appendChild(s('rect', { x: cx - 88, y: beamY + 248, width: 176, height: 13, rx: 6, fill: '#E8B24A' }));
 
     [
-      { side: 'left', x: cx - 190, data: spec.left },
-      { side: 'right', x: cx + 190, data: spec.right }
-    ].forEach(({ side, x, data }) => {
+      { side: 'left', x: cx - 200, data: spec.left, color: C.blue },
+      { side: 'right', x: cx + 200, data: spec.right, color: C.orange }
+    ].forEach(({ side, x, data, color }) => {
+      const items = data.items || [];
+      const trayW = 250;
+      const sideY = beamY + 58;
+      const trayH = 42 + Math.max(1, items.length) * 46;
       const g = s('g', { class: 'el' });
-      g.appendChild(s('path', { d: `M${x} ${beamY + 4} L${x - 62} ${beamY + 96}`, stroke: '#C9B08A', 'stroke-width': 2 }));
-      g.appendChild(s('path', { d: `M${x} ${beamY + 4} L${x + 62} ${beamY + 96}`, stroke: '#C9B08A', 'stroke-width': 2 }));
-      g.appendChild(s('rect', { x: x - 96, y: beamY + 92, width: 192, height: 20, rx: 10, fill: '#F7EAD2', stroke: '#D9BE8F', 'stroke-width': 1.6 }));
-      g.appendChild(s('rect', { x: x - 96, y: beamY + 108, width: 192, height: 8, rx: 4, fill: '#E9D3AC' }));
 
-      let yy = beamY + 66;
-      const items = (data.items || []);
+      // 吊绳 + 托盘
+      g.appendChild(s('path', { d: `M${x} ${beamY + 4} L${x - 104} ${sideY} M${x} ${beamY + 4} L${x + 104} ${sideY}`, stroke: '#C9B08A', 'stroke-width': 2 }));
+      g.appendChild(s('rect', { x: x - trayW / 2, y: sideY, width: trayW, height: trayH, rx: 14, fill: '#FFFDF8', stroke: '#D9BE8F', 'stroke-width': 1.6 }));
+      g.appendChild(s('rect', { x: x - trayW / 2 - 8, y: sideY - 7, width: trayW + 16, height: 12, rx: 6, fill: '#F7EAD2', stroke: '#D9BE8F', 'stroke-width': 1.2 }));
+
+      // 托盘标题（可被 set 改写）
+      const headT = s('text', { x, y: sideY + 28, class: 'lbl', 'text-anchor': 'middle', fill: color.deep, 'font-size': 14 }, data.label || '');
+      g.appendChild(headT);
+      g._text = headT;
+
+      // 物品：从上往下排，不再顶到横梁
+      let yy = sideY + 60;
       items.forEach((it, i) => {
-        const cw = it.text.length * 15 + 34;
-        const cxp = x - cw / 2;
+        const txt = String(it.text || '');
+        const cw = Math.min(trayW - 20, Math.max(80, txt.length * 14 + 26));
         const ig = s('g', { class: 'el', 'data-id': it.id });
-        ig.appendChild(s('rect', { x: cxp, y: yy - 30, width: cw, height: 38, rx: 11, fill: i % 2 ? '#E9F5FD' : '#FFF0E9', stroke: i % 2 ? '#9FD0EC' : '#FFB894', 'stroke-width': 1.6 }));
-        const tx = s('text', { x, y: yy - 5, class: 'lbl', 'text-anchor': 'middle', fill: '#2B4A63' }, it.text);
+        ig.appendChild(s('rect', { x: x - cw / 2, y: yy - 26, width: cw, height: 38, rx: 10, fill: i % 2 ? '#E9F5FD' : '#FFF0E9', stroke: i % 2 ? '#9FD0EC' : '#FFB894', 'stroke-width': 1.6 }));
+        const tx = s('text', { x, y: yy, class: 'lbl', 'text-anchor': 'middle', fill: '#2B4A63', 'font-size': 14 }, txt);
         ig.appendChild(tx);
         ig._text = tx;
         g.appendChild(ig);
         reg[it.id] = ig;
-        yy -= 46;
+        yy += 46;
       });
 
-      const lbl = s('text', { x, y: beamY + 152, class: 'note', 'text-anchor': 'middle' }, data.label || '');
-      g.appendChild(lbl);
-      g._text = lbl;
       beamGroup.appendChild(g);
       reg[side] = g;
     });
@@ -1850,8 +1909,8 @@ ${answerMsg}
     svg.appendChild(beamGroup);
 
     if (spec.hint) {
-      svg.appendChild(pill(cx - 150, 452, 300, 36, '#F4FBF7', '#BDE3CE'));
-      svg.appendChild(text(cx, 476, spec.hint, 'note', { fill: '#2C7A54' }));
+      svg.appendChild(pill(cx - 150, 470, 300, 34, '#F4FBF7', '#BDE3CE'));
+      svg.appendChild(text(cx, 493, spec.hint, 'note', { fill: '#2C7A54' }));
     }
     return svg;
   }
@@ -2317,8 +2376,10 @@ ${answerMsg}
     get steps() { return this.script.steps; }
 
     mount(spec, swap) {
+      const sp = spec || this.script.diagram;
+      this.activeType = sp.type;
       this.host.innerHTML = '';
-      const { svg, reg } = MT.diagrams.render(spec || this.script.diagram);
+      const { svg, reg } = MT.diagrams.render(sp);
       this.handle = { svg, reg };
       this.host.appendChild(svg);
       if (swap) svg.classList.add('swap-in');
@@ -2434,12 +2495,15 @@ ${answerMsg}
       let hit = 0;
       Object.keys(reg).forEach((id) => {
         if (ids.has(id)) { reg[id].classList.add('focus'); hit++; }
-        else reg[id].classList.add('dim');
       });
-      if (!hit) {
-        // 一个都没对上：宁可不压暗，也不要让整张图灰掉
-        Object.keys(reg).forEach((id) => reg[id].classList.remove('dim'));
-        return;
+      if (!hit) return;
+
+      // 文字密集的图不压暗：一压就看不清字，高亮就够了
+      const TEXT_HEAVY = ['balance', 'table', 'cards', 'cross', 'percentbar'];
+      if (!TEXT_HEAVY.includes(this.activeType)) {
+        Object.keys(reg).forEach((id) => {
+          if (!ids.has(id)) reg[id].classList.add('dim');
+        });
       }
       if (this.opts.onNote) this.opts.onNote(this.pendingNote || '');
     }
@@ -2810,7 +2874,7 @@ ${answerMsg}
       foot.appendChild(chip);
     }
     if (script.meta.note) {
-      foot.appendChild(el('span', { class: 'tag', text: script.meta.note }));
+      foot.appendChild(el('div', { class: 'foot-note', text: '说明：' + script.meta.note }));
     }
     (script.checks || []).slice(0, 3).forEach((c) => {
       const ok = MT.expr.checkMath(c).status !== 'bad';

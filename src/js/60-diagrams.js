@@ -169,50 +169,57 @@
   function renderBalance(spec, reg) {
     const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'dg' });
     title(svg, spec.title || '天平');
-    const cx = W / 2, beamY = 250;
+    const cx = W / 2, beamY = 172;
 
-    const beamGroup = s('g', { class: 'el', 'data-id': 'beam', style: 'transform-origin:0 0' });
+    const beamGroup = s('g', { class: 'el', 'data-id': 'beam' });
     reg.beam = beamGroup;
-    let tilt = 0;
     beamGroup._special = (v) => {
-      tilt = v === 'left' ? -4 : v === 'right' ? 4 : 0;
-      beamGroup.setAttribute('transform', `rotate(${tilt} ${cx} ${beamY})`);
+      const deg = v === 'left' ? -4 : v === 'right' ? 4 : 0;
+      beamGroup.setAttribute('transform', `rotate(${deg} ${cx} ${beamY})`);
     };
 
+    // 横梁 + 支点
     beamGroup.appendChild(s('rect', { x: cx - 250, y: beamY - 7, width: 500, height: 14, rx: 7, fill: '#F0B23C' }));
     beamGroup.appendChild(s('circle', { cx, cy: beamY, r: 13, fill: '#D98F1C' }));
-    beamGroup.appendChild(s('path', { d: `M${cx} ${beamY + 10} L${cx} ${beamY + 66}`, stroke: '#B8801C', 'stroke-width': 10, 'stroke-linecap': 'round' }));
-    beamGroup.appendChild(s('path', { d: `M${cx - 58} 400 L${cx + 58} 400 L${cx} ${beamY + 66} Z`, fill: '#F6C765', stroke: '#D98F1C', 'stroke-width': 2, 'stroke-linejoin': 'round' }));
-    beamGroup.appendChild(s('rect', { x: cx - 84, y: 398, width: 168, height: 14, rx: 7, fill: '#E8B24A' }));
+    beamGroup.appendChild(s('path', { d: `M${cx} ${beamY + 10} L${cx} ${beamY + 196}`, stroke: '#C08A22', 'stroke-width': 9, 'stroke-linecap': 'round' }));
+    beamGroup.appendChild(s('path', { d: `M${cx - 62} ${beamY + 250} L${cx + 62} ${beamY + 250} L${cx} ${beamY + 196} Z`, fill: '#F6C765', stroke: '#D98F1C', 'stroke-width': 2, 'stroke-linejoin': 'round' }));
+    beamGroup.appendChild(s('rect', { x: cx - 88, y: beamY + 248, width: 176, height: 13, rx: 6, fill: '#E8B24A' }));
 
     [
-      { side: 'left', x: cx - 190, data: spec.left },
-      { side: 'right', x: cx + 190, data: spec.right }
-    ].forEach(({ side, x, data }) => {
+      { side: 'left', x: cx - 200, data: spec.left, color: C.blue },
+      { side: 'right', x: cx + 200, data: spec.right, color: C.orange }
+    ].forEach(({ side, x, data, color }) => {
+      const items = data.items || [];
+      const trayW = 250;
+      const sideY = beamY + 58;
+      const trayH = 42 + Math.max(1, items.length) * 46;
       const g = s('g', { class: 'el' });
-      g.appendChild(s('path', { d: `M${x} ${beamY + 4} L${x - 62} ${beamY + 96}`, stroke: '#C9B08A', 'stroke-width': 2 }));
-      g.appendChild(s('path', { d: `M${x} ${beamY + 4} L${x + 62} ${beamY + 96}`, stroke: '#C9B08A', 'stroke-width': 2 }));
-      g.appendChild(s('rect', { x: x - 96, y: beamY + 92, width: 192, height: 20, rx: 10, fill: '#F7EAD2', stroke: '#D9BE8F', 'stroke-width': 1.6 }));
-      g.appendChild(s('rect', { x: x - 96, y: beamY + 108, width: 192, height: 8, rx: 4, fill: '#E9D3AC' }));
 
-      let yy = beamY + 66;
-      const items = (data.items || []);
+      // 吊绳 + 托盘
+      g.appendChild(s('path', { d: `M${x} ${beamY + 4} L${x - 104} ${sideY} M${x} ${beamY + 4} L${x + 104} ${sideY}`, stroke: '#C9B08A', 'stroke-width': 2 }));
+      g.appendChild(s('rect', { x: x - trayW / 2, y: sideY, width: trayW, height: trayH, rx: 14, fill: '#FFFDF8', stroke: '#D9BE8F', 'stroke-width': 1.6 }));
+      g.appendChild(s('rect', { x: x - trayW / 2 - 8, y: sideY - 7, width: trayW + 16, height: 12, rx: 6, fill: '#F7EAD2', stroke: '#D9BE8F', 'stroke-width': 1.2 }));
+
+      // 托盘标题（可被 set 改写）
+      const headT = s('text', { x, y: sideY + 28, class: 'lbl', 'text-anchor': 'middle', fill: color.deep, 'font-size': 14 }, data.label || '');
+      g.appendChild(headT);
+      g._text = headT;
+
+      // 物品：从上往下排，不再顶到横梁
+      let yy = sideY + 60;
       items.forEach((it, i) => {
-        const cw = it.text.length * 15 + 34;
-        const cxp = x - cw / 2;
+        const txt = String(it.text || '');
+        const cw = Math.min(trayW - 20, Math.max(80, txt.length * 14 + 26));
         const ig = s('g', { class: 'el', 'data-id': it.id });
-        ig.appendChild(s('rect', { x: cxp, y: yy - 30, width: cw, height: 38, rx: 11, fill: i % 2 ? '#E9F5FD' : '#FFF0E9', stroke: i % 2 ? '#9FD0EC' : '#FFB894', 'stroke-width': 1.6 }));
-        const tx = s('text', { x, y: yy - 5, class: 'lbl', 'text-anchor': 'middle', fill: '#2B4A63' }, it.text);
+        ig.appendChild(s('rect', { x: x - cw / 2, y: yy - 26, width: cw, height: 38, rx: 10, fill: i % 2 ? '#E9F5FD' : '#FFF0E9', stroke: i % 2 ? '#9FD0EC' : '#FFB894', 'stroke-width': 1.6 }));
+        const tx = s('text', { x, y: yy, class: 'lbl', 'text-anchor': 'middle', fill: '#2B4A63', 'font-size': 14 }, txt);
         ig.appendChild(tx);
         ig._text = tx;
         g.appendChild(ig);
         reg[it.id] = ig;
-        yy -= 46;
+        yy += 46;
       });
 
-      const lbl = s('text', { x, y: beamY + 152, class: 'note', 'text-anchor': 'middle' }, data.label || '');
-      g.appendChild(lbl);
-      g._text = lbl;
       beamGroup.appendChild(g);
       reg[side] = g;
     });
@@ -220,8 +227,8 @@
     svg.appendChild(beamGroup);
 
     if (spec.hint) {
-      svg.appendChild(pill(cx - 150, 452, 300, 36, '#F4FBF7', '#BDE3CE'));
-      svg.appendChild(text(cx, 476, spec.hint, 'note', { fill: '#2C7A54' }));
+      svg.appendChild(pill(cx - 150, 470, 300, 34, '#F4FBF7', '#BDE3CE'));
+      svg.appendChild(text(cx, 493, spec.hint, 'note', { fill: '#2C7A54' }));
     }
     return svg;
   }

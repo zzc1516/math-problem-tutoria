@@ -30,8 +30,10 @@
     get steps() { return this.script.steps; }
 
     mount(spec, swap) {
+      const sp = spec || this.script.diagram;
+      this.activeType = sp.type;
       this.host.innerHTML = '';
-      const { svg, reg } = MT.diagrams.render(spec || this.script.diagram);
+      const { svg, reg } = MT.diagrams.render(sp);
       this.handle = { svg, reg };
       this.host.appendChild(svg);
       if (swap) svg.classList.add('swap-in');
@@ -147,12 +149,15 @@
       let hit = 0;
       Object.keys(reg).forEach((id) => {
         if (ids.has(id)) { reg[id].classList.add('focus'); hit++; }
-        else reg[id].classList.add('dim');
       });
-      if (!hit) {
-        // 一个都没对上：宁可不压暗，也不要让整张图灰掉
-        Object.keys(reg).forEach((id) => reg[id].classList.remove('dim'));
-        return;
+      if (!hit) return;
+
+      // 文字密集的图不压暗：一压就看不清字，高亮就够了
+      const TEXT_HEAVY = ['balance', 'table', 'cards', 'cross', 'percentbar'];
+      if (!TEXT_HEAVY.includes(this.activeType)) {
+        Object.keys(reg).forEach((id) => {
+          if (!ids.has(id)) reg[id].classList.add('dim');
+        });
       }
       if (this.opts.onNote) this.opts.onNote(this.pendingNote || '');
     }

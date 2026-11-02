@@ -286,7 +286,7 @@
       foot.appendChild(chip);
     }
     if (script.meta.note) {
-      foot.appendChild(el('span', { class: 'tag', text: script.meta.note }));
+      foot.appendChild(el('div', { class: 'foot-note', text: '说明：' + script.meta.note }));
     }
     (script.checks || []).slice(0, 3).forEach((c) => {
       const ok = MT.expr.checkMath(c).status !== 'bad';

@@ -203,6 +203,57 @@
     warning: ''
   };
 
+  /* 简易方程：天平图 + 等式性质 */
+  const equation = {
+    meta: { topic: '简易方程 · 逆推', grade: 5, method: 'equation', unit1: false, unit1Used: false, gradeFit: 'ok', note: '' },
+    problem: {
+      text: '一个数的 3 倍再加上 5，结果是 26。这个数是多少？',
+      givens: [{ name: '某个数', value: 'x', unit: '' }],
+      question: '这个数是多少？'
+    },
+    plan: { headline: '设这个数为 x，把题目的意思写成等式', relation: '3x + 5 = 26' },
+    diagram: {
+      type: 'balance', title: '天平：两边一样重', hint: '左边和右边一样重',
+      left: { label: '3x + 5', items: [{ id: 'l1', text: '3 个 x' }, { id: 'l2', text: '+ 5' }] },
+      right: { label: '26', items: [{ id: 'r1', text: '26' }] }
+    },
+    steps: [
+      {
+        phase: '理解', title: '把话翻译成式子',
+        text: '不知道的这个数，我们就叫它 x。它的 3 倍再加 5，等于 26。',
+        math: '', why: '用字母代替不知道的数，题目就变成了一道等式。',
+        ops: [{ op: 'focus', ids: ['l1', 'l2'], text: '3x + 5' }]
+      },
+      {
+        phase: '关系', title: '天平要保持平衡',
+        text: '左边是 3x + 5，右边是 26，两边一样重。',
+        math: '3x + 5 = 26', why: '等号就像天平，两边同时做同样的事，天平还是平的。',
+        ops: [{ op: 'focus', ids: ['l1', 'l2', 'r1'], text: '两边相等' }]
+      },
+      {
+        phase: '列式', title: '两边同时减去 5',
+        text: '左边去掉 5，右边也去掉 5，剩下 3x = 21。',
+        math: '26 - 5 = 21', why: '要把 5 抵消掉，就得两边同时减 5。',
+        ops: [{ op: 'hide', ids: ['l2'] }, { op: 'set', id: 'r1', text: '21' }, { op: 'focus', ids: ['r1'], text: '26 − 5 = 21' }]
+      },
+      {
+        phase: '计算', title: '两边同时除以 3',
+        text: '3 个 x 是 21，那 1 个 x 就是 21 ÷ 3 = 7。',
+        math: '21 / 3 = 7', why: '3 份是 21，求 1 份就用除法。',
+        ops: [{ op: 'set', id: 'l1', text: 'x = 7' }, { op: 'focus', ids: ['l1'], text: 'x 就是 7' }, { op: 'mark', id: 'l1', text: '✓' }]
+      },
+      {
+        phase: '检验', title: '代回去看看',
+        text: '3 × 7 + 5 = 26，正好等于题目说的结果。',
+        math: '3 * 7 + 5 = 26', why: '把 x = 7 放回原式，等式成立就说明解对了。',
+        ops: [{ op: 'focus', ids: ['l1', 'r1'], text: '两边都成立' }, { op: 'pulse', ids: ['l1', 'r1'] }]
+      }
+    ],
+    answer: { value: '7', unit: '', sentence: '这个数是 7。' },
+    checks: ['26 - 5 = 21', '21 / 3 = 7', '3 * 7 + 5 = 26'],
+    warning: ''
+  };
+
   const examples = [
     { label: '分数 · 单位1', grade: 6, text: '小明有 48 元，小红的钱是小明的 3/4，两个人一共有多少元？' },
     { label: '和差问题', grade: 4, text: '甲、乙两盒共有 48 张卡片，甲盒比乙盒多 12 张。两盒各有多少张卡片？' },
@@ -215,5 +266,5 @@
     { label: '浓度问题', grade: 6, text: solution.problem.text }
   ];
 
-  MT.demo = { lessons: [demo, discount, solution], examples };
+  MT.demo = { lessons: [demo, discount, solution, equation], examples };
 })();
