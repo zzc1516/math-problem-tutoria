@@ -723,6 +723,15 @@
     }
 
     // 调试/演示用锚点
+    if (location.hash === '#qa') {
+      setTimeout(() => {
+        showDemo(false, 2);
+        appendBubble('ask', '为什么这里要除以 4？');
+        appendBubble('ans', '十字交叉就像跷跷板：65% 坐在中间，两边离它多远，份数就按相反的来分。100% 离 65% 差 35，25% 离 65% 差 40，40 : 35 就是 8 : 7。');
+        appendBubble('ask', '那如果两边浓度反过来呢？');
+        appendBubble('ans', '结果一定落在两者中间。只要知道两边浓度和混合后的浓度，且总量能对上，就能用。');
+      }, 120);
+    }
     if (location.hash === '#settings') {
       openSettings();
       const card = $('.modal-card');

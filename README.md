@@ -234,7 +234,7 @@ node tests/run.mjs  # 62 项：分数、算式自检、提示词范例、内置�
 
 改了 `src/` 之后重新跑一遍 `build.mjs` 即可，产物仍是单文件、双击可用。
 
-调试锚点：`#demo`、`#demo2`、`#demo3`（内置示例）、`#demo3s4`（第 4 步）、`#settings`、`#shot`。
+调试锚点：`#demo`、`#demo2`…`#demo5`（内置示例）、`#demo5s3`（第 3 步）、`#settings`、`#shot`、`#qa`。
 
 ## 9. 隐私
 

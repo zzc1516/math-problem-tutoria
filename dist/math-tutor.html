@@ -349,7 +349,7 @@ button{font-family:inherit}
 .check-pill.bad{color:#A33A28;background:#FDEDE9;border-color:#F6CFC6}
 
 .steps-list{
-  list-style:none;margin:0;padding:12px 14px 4px;overflow-y:auto;flex:1;
+  list-style:none;margin:0;padding:12px 14px 4px;overflow-y:auto;flex:1;min-height:120px;
   scrollbar-width:thin;scrollbar-color:#DCD3C5 transparent;
 }
 .steps-list::-webkit-scrollbar{width:7px}
@@ -408,9 +408,9 @@ button{font-family:inherit}
 
 /* 追问 */
 .qa{border-top:1px solid var(--line-2);padding:10px 14px 12px;background:var(--panel-soft);border-radius:0 0 var(--r-lg) var(--r-lg)}
-.qa-log{display:flex;flex-direction:column;gap:7px;max-height:190px;overflow-y:auto;scrollbar-width:thin}
+.qa-log{display:flex;flex-direction:column;gap:7px;max-height:170px;overflow-y:auto;scrollbar-width:thin}
 .qa-log:empty{display:none}
-.qa-bubble{font-size:12.5px;line-height:1.65;border-radius:12px;padding:7px 11px;max-width:92%}
+.qa-bubble{font-size:12.5px;line-height:1.65;border-radius:12px;padding:7px 11px;max-width:92%;flex:0 0 auto}
 .qa-bubble.ask{align-self:flex-end;background:#E9F5FD;color:#1C5F87;border-bottom-right-radius:4px}
 .qa-bubble.ans{align-self:flex-start;background:#fff;border:1px solid var(--line);color:#4A5A6A;border-bottom-left-radius:4px}
 .qa-bubble.pending{color:var(--faint);font-style:italic}
@@ -568,7 +568,7 @@ input[type=range]{width:100%;accent-color:var(--brand)}
 <!--
   数学图解讲解 · Math Tutor
   单文件版本，由 build.mjs 从 src/ 生成，请勿直接编辑本文件。
-  构建版本：9f0c5077
+  构建版本：81ac0ee6
   许可：MIT
 -->
 
@@ -4391,6 +4391,15 @@ ${answerMsg}
     }
 
     // 调试/演示用锚点
+    if (location.hash === '#qa') {
+      setTimeout(() => {
+        showDemo(false, 2);
+        appendBubble('ask', '为什么这里要除以 4？');
+        appendBubble('ans', '十字交叉就像跷跷板：65% 坐在中间，两边离它多远，份数就按相反的来分。100% 离 65% 差 35，25% 离 65% 差 40，40 : 35 就是 8 : 7。');
+        appendBubble('ask', '那如果两边浓度反过来呢？');
+        appendBubble('ans', '结果一定落在两者中间。只要知道两边浓度和混合后的浓度，且总量能对上，就能用。');
+      }, 120);
+    }
     if (location.hash === '#settings') {
       openSettings();
       const card = $('.modal-card');
