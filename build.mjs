@@ -3,6 +3,7 @@
  * 双击即可运行，不需要任何服务器、不需要联网安装依赖。
  */
 import { readFileSync, writeFileSync, readdirSync, mkdirSync, existsSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -23,10 +24,14 @@ const jsParts = jsFiles.map((f) => {
   return `\n/* ==================== ${f} ==================== */\n${code}`;
 });
 
+// 用内容哈希而不是时间戳：源码没变时产物完全一致，git 里不会每次构建都产生 diff
+const version = createHash('sha256').update(css + jsParts.join('')).digest('hex').slice(0, 8);
+
 const banner = `<!--
   数学图解讲解 · Math Tutor
   单文件版本，由 build.mjs 从 src/ 生成，请勿直接编辑本文件。
-  构建时间：${new Date().toLocaleString('zh-CN')}
+  构建版本：${version}
+  许可：MIT
 -->`;
 
 const out = shell
@@ -36,6 +41,14 @@ const out = shell
 
 writeFileSync(join(dist, 'math-tutor.html'), out, 'utf8');
 writeFileSync(join(dist, 'math-tutor.js'), jsParts.join('\n'), 'utf8');
+
+// 可直接拖到 Netlify Drop / Cloudflare Pages 的目录
+const site = join(root, 'site');
+if (!existsSync(site)) mkdirSync(site, { recursive: true });
+writeFileSync(join(site, 'index.html'), out, 'utf8');
+writeFileSync(join(site, '404.html'), out, 'utf8');
+
 const kb = (Buffer.byteLength(out, 'utf8') / 1024).toFixed(1);
 console.log(`✓ dist/math-tutor.html  ${kb} KB  (${jsFiles.length} 个脚本，CSS ${(css.length / 1024).toFixed(1)} KB)`);
 console.log(`✓ dist/math-tutor.js    ${(jsParts.join('').length / 1024).toFixed(1)} KB  (预览/调试用)`);
+console.log(`✓ site/index.html       ${kb} KB  (整个 site 文件夹可直接拖去静态托管)`);

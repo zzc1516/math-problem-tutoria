@@ -24,6 +24,31 @@
 
 不想配 Key 也可以先点 **看示例** —— 内置 3 节完整讲解（分数、折扣盈亏、浓度），不需要联网。
 
+### 想发到网上给别人用？
+
+**Gitee Pages 已经停止服务**：`*.gitee.io` 域名还能解析，但所有站点（包括 layui、hutool 这些老牌项目）都已 404。
+Gitee 现在只做代码托管，仓库「服务」菜单里如果没有 Pages，就是确实没有了。
+
+替代方案（都免费、都带 HTTPS）：
+
+1. 先构建出可部署目录：
+
+   ```bash
+   node build.mjs        # 生成 site/index.html（整份应用，单文件）
+   ```
+
+2. 三选一发布：
+
+   | 方式 | 操作 | 结果 |
+   |---|---|---|
+   | **Netlify Drop** | 打开 <https://app.netlify.com/drop>，把 `site` 文件夹拖进去 | 几秒后拿到 `xxx.netlify.app` |
+   | **Cloudflare Pages** | Workers & Pages → 创建 → 直接上传 `site` 文件夹 | `xxx.pages.dev` |
+   | **GitHub Pages** | 把仓库镜像到 GitHub → Settings → Pages → 选分支根目录 | `xxx.github.io/repo` |
+
+发布后所有访问者用的是同一个网页，但 **API Key 各配各的**（存在各自浏览器 localStorage 里），互不影响，你也不承担别人的调用费用。
+
+> 单文件还有个更省事的用法：直接把 `dist/math-tutor.html` 发给对方，双击就能用，连托管都不需要。
+
 ---
 
 ## 2. 选哪家服务商
