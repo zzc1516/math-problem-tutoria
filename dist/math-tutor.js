@@ -2687,7 +2687,6 @@ ${answerMsg}
       if (!ex) return;
       $('#problem').value = ex.text;
       setGrade(ex.grade);
-      setCompact(false);
       $('#problem').focus();
       sel.value = '';
     });
@@ -2796,11 +2795,6 @@ ${answerMsg}
     }
   }
 
-  function setCompact(on) {
-    const ask = $('.ask');
-    if (ask) ask.classList.toggle('compact', !!on);
-  }
-
   /* ---------------- 渲染一节课 ---------------- */
   function render(res) {
     const script = res.script;
@@ -2862,7 +2856,6 @@ ${answerMsg}
     $('#btnRethink').hidden = false;
 
     state.player.goto(0, true);
-    setCompact(true);
   }
 
   function renderSteps(script, verify) {
@@ -3292,17 +3285,15 @@ ${answerMsg}
     updateHint();
 
     $('#btnSolve').addEventListener('click', () => solve());
-    $('#problem').addEventListener('focus', () => setCompact(false));
     $('#problem').addEventListener('keydown', (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') solve();
     });
     $('#btnClear').addEventListener('click', () => {
       $('#problem').value = '';
       clearShot();
-      setCompact(false);
       $('#problem').focus();
     });
-    $('#btnRandom').addEventListener('click', () => { setCompact(false); randomExample(); });
+    $('#btnRandom').addEventListener('click', randomExample);
     $('#btnRethink').addEventListener('click', () => {
       solve({ nudge: '换一种更直观的讲解顺序，多用图上的动作，少讲抽象的话。' });
     });
