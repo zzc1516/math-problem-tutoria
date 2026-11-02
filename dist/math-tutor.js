@@ -1,0 +1,3142 @@
+
+/* ==================== 00-util.js ==================== */
+/* 00-util.js —— 基础工具：DOM、存储、提示、格式化 */
+(function () {
+  const MT = (window.MT = window.MT || {});
+
+  const $ = (sel, root) => (root || document).querySelector(sel);
+  const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
+  const el = (tag, attrs, html) => {
+    const n = document.createElement(tag);
+    if (attrs) for (const k in attrs) {
+      if (k === 'class') n.className = attrs[k];
+      else if (k === 'text') n.textContent = attrs[k];
+      else if (k.startsWith('on') && typeof attrs[k] === 'function') n.addEventListener(k.slice(2), attrs[k]);
+      else if (attrs[k] != null) n.setAttribute(k, attrs[k]);
+    }
+    if (html != null) n.innerHTML = html;
+    return n;
+  };
+  const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const uid = (p) => (p || 'id') + '_' + Math.random().toString(36).slice(2, 8);
+
+  const store = {
+    get(k, def) {
+      try {
+        const v = localStorage.getItem('mt.' + k);
+        return v == null ? def : JSON.parse(v);
+      } catch (e) { return def; }
+    },
+    set(k, v) {
+      try { localStorage.setItem('mt.' + k, JSON.stringify(v)); } catch (e) { /* 隐私模式忽略 */ }
+    },
+    del(k) { try { localStorage.removeItem('mt.' + k); } catch (e) {} }
+  };
+
+  let toastTimer = null;
+  function toast(msg, kind, ms) {
+    const wrap = $('#toastWrap');
+    if (!wrap) return;
+    const t = el('div', { class: 'toast ' + (kind || '') , text: msg });
+    wrap.appendChild(t);
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      t.style.transition = 'opacity .3s, transform .3s';
+      t.style.opacity = '0';
+      t.style.transform = 'translateY(8px)';
+      setTimeout(() => t.remove(), 320);
+    }, ms || 2600);
+  }
+
+  /** 把数字格式化成好看的中文表达：整数原样，小数最多两位 */
+  function num(v) {
+    if (v == null || v === '' || isNaN(v)) return String(v == null ? '' : v);
+    const n = Number(v);
+    if (Number.isInteger(n)) return String(n);
+    return String(Math.round(n * 100) / 100);
+  }
+
+  /** 中文数字（1-6 年级） */
+  function cnNum(n) {
+    const cn = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
+    return n >= 0 && n <= 10 ? cn[n] : String(n);
+  }
+
+  function debounce(fn, wait) {
+    let t;
+    return function (...args) {
+      clearTimeout(t);
+      t = setTimeout(() => fn.apply(this, args), wait);
+    };
+  }
+
+  function escapeHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => (
+      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+    ));
+  }
+
+  /** 简易 Markdown 行内渲染（**粗体** 和 `代码`），用于讲解文本 */
+  function inlineMd(s) {
+    let out = escapeHtml(s);
+    out = out.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+    out = out.replace(/`(.+?)`/g, '<code>$1</code>');
+    return out;
+  }
+
+  MT.util = { $, $$, el, clamp, sleep, uid, store, toast, num, cnNum, debounce, escapeHtml, inlineMd };
+})();
+
+
+/* ==================== 10-frac.js ==================== */
+/* 10-frac.js —— 精确分数运算，供「算式自检」使用 */
+(function () {
+  const MT = (window.MT = window.MT || {});
+
+  function gcd(a, b) {
+    a = Math.abs(a); b = Math.abs(b);
+    while (b) { const t = a % b; a = b; b = t; }
+    return a || 1;
+  }
+
+  class Frac {
+    constructor(n, d) {
+      n = Math.round(n); d = Math.round(d === undefined ? 1 : d);
+      if (d === 0) throw new Error('除数不能为 0');
+      if (d < 0) { n = -n; d = -d; }
+      const g = gcd(n, d);
+      this.n = n / g;
+      this.d = d / g;
+    }
+    add(o) { return new Frac(this.n * o.d + o.n * this.d, this.d * o.d); }
+    sub(o) { return new Frac(this.n * o.d - o.n * this.d, this.d * o.d); }
+    mul(o) { return new Frac(this.n * o.n, this.d * o.d); }
+    div(o) { if (o.n === 0) throw new Error('除以 0'); return new Frac(this.n * o.d, this.d * o.n); }
+    neg() { return new Frac(-this.n, this.d); }
+    eq(o) { return this.n === o.n && this.d === o.d; }
+    lt(o) { return this.n * o.d < o.n * this.d; }
+    get value() { return this.n / this.d; }
+    toString() { return this.d === 1 ? String(this.n) : this.n + '/' + this.d; }
+    isZero() { return this.n === 0; }
+
+    static of(x) { return x instanceof Frac ? x : new Frac(x, 1); }
+
+    /** 解析 "3/4" / "0.75" / "-12" / "75%" */
+    static parse(str) {
+      let s = String(str).trim().replace(/\s+/g, '');
+      let pct = false;
+      if (s.endsWith('%')) { pct = true; s = s.slice(0, -1); }
+      let f;
+      const m = s.match(/^([+-]?\d+(?:\.\d+)?)\/([+-]?\d+(?:\.\d+)?)$/);
+      if (m) {
+        f = new Frac(decToInt(m[1]) * (1), 1);
+        const a = decOf(m[1]), b = decOf(m[2]);
+        f = new Frac(a.n * b.d, a.d * b.n);
+      } else {
+        const d = decOf(s);
+        f = new Frac(d.n, d.d);
+      }
+      return pct ? f.div(new Frac(100, 1)) : f;
+    }
+  }
+
+  /** "3.75" -> {n:375,d:100} */
+  function decOf(s) {
+    s = String(s).trim();
+    let sign = 1;
+    if (s[0] === '-') { sign = -1; s = s.slice(1); }
+    else if (s[0] === '+') s = s.slice(1);
+    const dot = s.indexOf('.');
+    if (dot < 0) return { n: sign * parseInt(s || '0', 10), d: 1 };
+    const int = s.slice(0, dot) || '0';
+    const frac = s.slice(dot + 1);
+    const d = Math.pow(10, frac.length);
+    return { n: sign * parseInt(int + frac, 10), d: d };
+  }
+  function decToInt(s) { const d = decOf(s); return d.n; }
+
+  MT.Frac = Frac;
+})();
+
+
+/* ==================== 20-expr.js ==================== */
+/* 20-expr.js —— 算式求值 + 讲解步骤自检
+   目标：模型算错的地方，浏览器这边要抓得住。
+   支持：整数、小数、分数、百分号、括号、+-×÷，左右两边用 = 比较。 */
+(function () {
+  const MT = (window.MT = window.MT || {});
+  const Frac = MT.Frac;
+
+  function tokenize(src) {
+    const s = String(src)
+      .replace(/[＋]/g, '+').replace(/[－—–−]/g, '-')
+      .replace(/[×✕✖·⋅]/g, '*').replace(/[÷／]/g, '/')
+      .replace(/[（]/g, '(').replace(/[）]/g, ')')
+      .replace(/\s+/g, '');
+    const tokens = [];
+    let i = 0;
+    while (i < s.length) {
+      const c = s[i];
+      if (/[0-9.]/.test(c)) {
+        let j = i;
+        while (j < s.length && /[0-9.]/.test(s[j])) j++;
+        const raw = s.slice(i, j);
+        if ((raw.match(/\./g) || []).length > 1) throw new Error('数字格式错误：' + raw);
+        tokens.push({ t: 'num', v: raw });
+        i = j;
+      } else if ('+-*/()%'.includes(c)) {
+        tokens.push({ t: c });
+        i++;
+      } else {
+        throw new Error('看不懂的符号：' + c);
+      }
+    }
+    return tokens;
+  }
+
+  function parse(tokens) {
+    let p = 0;
+    const peek = () => tokens[p];
+    const eat = (t) => { if (tokens[p] && tokens[p].t === t) { p++; return true; } return false; };
+
+    function expr() {
+      let left = term();
+      for (;;) {
+        if (eat('+')) left = left.add(term());
+        else if (eat('-')) left = left.sub(term());
+        else return left;
+      }
+    }
+    function term() {
+      let left = unary();
+      for (;;) {
+        if (eat('*')) left = left.mul(unary());
+        else if (eat('/')) left = left.div(unary());
+        else return left;
+      }
+    }
+    function unary() {
+      if (eat('-')) return unary().neg();
+      if (eat('+')) return unary();
+      return postfix();
+    }
+    function postfix() {
+      let v = primary();
+      while (eat('%')) v = v.div(new Frac(100, 1));
+      return v;
+    }
+    function primary() {
+      const tk = peek();
+      if (!tk) throw new Error('算式不完整');
+      if (tk.t === 'num') { p++; return Frac.parse(tk.v); }
+      if (tk.t === '(') {
+        p++;
+        const v = expr();
+        if (!eat(')')) throw new Error('括号没有配对');
+        return v;
+      }
+      throw new Error('算式里多了个符号：' + (tk.v || tk.t));
+    }
+
+    const v = expr();
+    if (p < tokens.length) throw new Error('算式多出一段：' + tokens.slice(p).map((x) => x.v || x.t).join(''));
+    return v;
+  }
+
+  function evalExpr(s) {
+    const tokens = tokenize(s);
+    if (!tokens.length) throw new Error('空算式');
+    return parse(tokens);
+  }
+
+  /** 从可能夹带单位的算式里提炼纯算术部分；含字母/汉字则放弃核查 */
+  function cleanMath(raw) {
+    let s = String(raw || '');
+    if (/[a-zA-Z]/.test(s)) return { skip: true, reason: '含字母（方程变形），跳过自动核查' };
+    if (/[甲乙丙丁A-Za-z]/.test(s)) return { skip: true, reason: '含未知量名称，跳过自动核查' };
+    // 去掉单位、说明文字：只保留算术字符与百分号
+    s = s.replace(/[^0-9.+\-*/×÷（）()＝=%\s]/g, ' ');
+    s = s.replace(/[＝]/g, '=');
+    s = s.replace(/\s+/g, '');
+    if (!/[0-9]/.test(s)) return { skip: true, reason: '这一步没有可计算的数字' };
+    if (!s.includes('=')) return { skip: true, reason: '这一步是思路说明，不是算式' };
+    return { skip: false, text: s };
+  }
+
+  /**
+   * 核查一条算式，例如 "48 ÷ 4 = 12"
+   * @returns {{status:'ok'|'bad'|'skip', message?:string, value?:Frac}}
+   */
+  function checkMath(raw) {
+    const cleaned = cleanMath(raw);
+    if (cleaned.skip) return { status: 'skip', message: cleaned.reason };
+    const parts = cleaned.text.split('=');
+    try {
+      if (parts.length === 1) {
+        return { status: 'ok', value: evalExpr(parts[0]) };
+      }
+      const vals = parts.map((p) => evalExpr(p));
+      const first = vals[0];
+      for (let i = 1; i < vals.length; i++) {
+        if (!first.eq(vals[i])) {
+          return {
+            status: 'bad',
+            message: `等号两边不相等：左边 ${first.toString()}，右边 ${vals[i].toString()}`,
+            left: first, right: vals[i]
+          };
+        }
+      }
+      return { status: 'ok', value: first, parts: vals };
+    } catch (e) {
+      return { status: 'skip', message: e.message };
+    }
+  }
+
+  /** 两个数值字符串是否数学上相等（用于核对最终答案） */
+  function sameValue(a, b) {
+    if (a == null || b == null || a === '' || b === '') return null;
+    try { return Frac.parse(String(a).replace(/[^\d.\-/]/g, '')).eq(Frac.parse(String(b).replace(/[^\d.\-/]/g, ''))); }
+    catch (e) { return null; }
+  }
+
+  MT.expr = { evalExpr, checkMath, cleanMath, sameValue };
+})();
+
+
+/* ==================== 30-schema.js ==================== */
+/* 30-schema.js —— LessonScript 讲解脚本协议：规范化、校验、自检 */
+(function () {
+  const MT = (window.MT = window.MT || {});
+  const U = MT.util;
+
+  const DIAGRAM_TYPES = ['segment', 'bars', 'balance', 'area', 'solid', 'route', 'table', 'numberline', 'percentbar', 'cross', 'cards'];
+  const OP_TYPES = ['focus', 'dim', 'show', 'hide', 'set', 'mark', 'pulse'];
+  const PHASES = ['理解', '关系', '列式', '计算', '检验'];
+
+  /** 从模型返回的文本里抠出 JSON 对象 */
+  function extractJson(text) {
+    if (typeof text !== 'string') return text;
+    let s = text.trim();
+    if (s.startsWith('```')) {
+      s = s.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+    }
+    const first = s.indexOf('{');
+    const last = s.lastIndexOf('}');
+    if (first > 0 || last < s.length - 1) {
+      if (first >= 0 && last > first) s = s.slice(first, last + 1);
+    }
+    return JSON.parse(s);
+  }
+
+  function asArray(x) { return Array.isArray(x) ? x : (x == null ? [] : [x]); }
+  function str(x) { return x == null ? '' : String(x); }
+  function pickColor(c) {
+    const map = { red: 'red', orange: 'orange', blue: 'blue', green: 'green', purple: 'purple', amber: 'amber', gray: 'gray' };
+    return map[str(c).toLowerCase()] || 'blue';
+  }
+
+  function normalizeDiagram(d) {
+    d = d && typeof d === 'object' ? d : {};
+    let type = str(d.type).toLowerCase();
+    if (!DIAGRAM_TYPES.includes(type)) type = 'cards';
+    const out = { type, title: str(d.title) };
+
+    if (type === 'segment') {
+      out.parts = asArray(d.parts).slice(0, 6).map((p, i) => ({
+        id: str(p.id) || 'p' + (i + 1),
+        ratio: Math.max(1, Number(p.ratio) || 1),
+        label: str(p.label),
+        value: str(p.value),
+        color: pickColor(p.color || ['blue', 'orange', 'green', 'purple'][i % 4])
+      }));
+      if (!out.parts.length) out.parts = [{ id: 'p1', ratio: 1, label: '', value: '', color: 'blue' }];
+      out.total = d.total ? { id: str(d.total.id) || 'total', label: str(d.total.label), value: str(d.total.value) } : null;
+      out.unitOne = d.unitOne && str(d.unitOne.id) ? { id: str(d.unitOne.id), label: str(d.unitOne.label || '1') } : null;
+      out.question = d.question ? { id: str(d.question.id) || 'q', label: str(d.question.label) } : null;
+    } else if (type === 'bars') {
+      out.rows = asArray(d.rows).slice(0, 6).map((r, i) => ({
+        id: str(r.id) || 'r' + (i + 1),
+        label: str(r.label),
+        ratio: Math.max(1, Math.min(12, Number(r.ratio) || 1)),
+        value: str(r.value),
+        color: pickColor(r.color || ['blue', 'orange', 'green', 'purple'][i % 4])
+      }));
+      if (!out.rows.length) out.rows = [{ id: 'r1', label: '', ratio: 1, value: '', color: 'blue' }];
+      out.unit = str(d.unit || '份');
+    } else if (type === 'balance') {
+      const side = (s, defId) => ({
+        label: str(s && s.label),
+        items: asArray(s && s.items).slice(0, 4).map((it, i) => ({
+          id: str(it.id) || defId + (i + 1), text: str(it.text)
+        }))
+      });
+      out.left = side(d.left, 'l');
+      out.right = side(d.right, 'r');
+      out.hint = str(d.hint);
+    } else if (type === 'area') {
+      const shapes = ['rect', 'triangle', 'parallelogram', 'trapezoid', 'circle', 'composite'];
+      out.shape = shapes.includes(str(d.shape).toLowerCase()) ? str(d.shape).toLowerCase() : 'rect';
+      out.dims = Object.assign({ w: 8, h: 5, b: 6, b2: 4, h2: 4, r: 3 }, d.dims || {});
+      for (const k in out.dims) out.dims[k] = Number(out.dims[k]) || out.dims[k];
+      out.unit = str(d.unit || '厘米');
+      out.labels = d.labels || {};
+      out.formula = str(d.formula);
+    } else if (type === 'solid') {
+      const shapes = ['cuboid', 'cube', 'cylinder', 'cone', 'prism'];
+      out.shape = shapes.includes(str(d.shape).toLowerCase()) ? str(d.shape).toLowerCase() : 'cuboid';
+      out.dims = Object.assign({ l: 5, w: 3, h: 4, r: 2 }, d.dims || {});
+      for (const k in out.dims) out.dims[k] = Number(out.dims[k]) || out.dims[k];
+      out.unit = str(d.unit || '厘米');
+      out.formula = str(d.formula);
+    } else if (type === 'route') {
+      out.length = Number(d.length) || 100;
+      out.unit = str(d.unit || '千米');
+      out.travelers = asArray(d.travelers).slice(0, 3).map((t, i) => ({
+        id: str(t.id) || 't' + (i + 1),
+        name: str(t.name),
+        pos: Number(t.pos) || 0,
+        dir: Number(t.dir) >= 0 ? 1 : -1,
+        speed: str(t.speed),
+        color: pickColor(t.color || ['blue', 'orange', 'green'][i % 3])
+      }));
+      out.marks = asArray(d.marks).slice(0, 4).map((m, i) => ({
+        id: str(m.id) || 'm' + (i + 1), at: Number(m.at) || 0, label: str(m.label)
+      }));
+    } else if (type === 'table') {
+      out.cols = asArray(d.cols).slice(0, 5).map((c, i) => ({ key: str(c.key) || 'c' + i, label: str(c.label) }));
+      out.rows = asArray(d.rows).slice(0, 12).map((r, i) => ({
+        id: str(r.id) || 'row' + (i + 1),
+        cells: asArray(r.cells).map(str)
+      }));
+    } else if (type === 'numberline') {
+      out.min = Number(d.min) || 0;
+      out.max = d.max == null ? 1 : Number(d.max);
+      out.ticks = asArray(d.ticks).slice(0, 20).map((t, i) => ({
+        id: str(t.id) || 'tick' + i,
+        value: Number(t.value) || 0,
+        label: str(t.label)
+      }));
+      out.marks = asArray(d.marks).slice(0, 4).map((m, i) => ({
+        id: str(m.id) || 'mark' + i, value: Number(m.value) || 0, label: str(m.label), color: pickColor(m.color || 'orange')
+      }));
+      out.refs = asArray(d.refs).slice(0, 3).map((r, i) => ({
+        id: str(r.id) || 'ref' + i, at: Number(r.at) || 0, label: str(r.label), color: pickColor(r.color || 'green')
+      }));
+      out.spans = asArray(d.spans).slice(0, 4).map((r, i) => ({
+        id: str(r.id) || 'span' + i,
+        from: Number(r.from) || 0, to: Number(r.to) || 0,
+        label: str(r.label), color: pickColor(r.color || 'orange')
+      }));
+    } else if (type === 'percentbar') {
+      out.rows = asArray(d.rows).slice(0, 3).map((r, i) => ({
+        id: str(r.id) || 'pb' + (i + 1),
+        label: str(r.label),
+        total: str(r.total),
+        segments: asArray(r.segments).slice(0, 4).map((sg, k) => ({
+          id: str(sg.id) || 'pbs' + (i + 1) + k,
+          pct: Math.max(0, Number(sg.pct) || 0),
+          label: str(sg.label),
+          color: pickColor(sg.color || ['orange', 'blue', 'green', 'purple'][k % 4])
+        }))
+      }));
+      if (!out.rows.length) out.rows = [{ id: 'pb1', label: '', total: '', segments: [{ id: 'pbs1', pct: 100, label: '', color: 'blue' }] }];
+      out.note = str(d.note);
+    } else if (type === 'cross') {
+      out.rows = asArray(d.rows).slice(0, 2).map((r, i) => ({
+        id: str(r.id) || 'cr' + (i + 1),
+        label: str(r.label),
+        value: str(r.value),
+        share: str(r.share),
+        color: pickColor(r.color || ['orange', 'blue', 'green'][i % 3])
+      }));
+      if (out.rows.length < 2) out.rows.push({ id: 'cr2', label: '', value: '', share: '', color: 'blue' });
+      const mid = d.mid || {};
+      out.mid = { id: str(mid.id) || 'mid', value: str(mid.value), label: str(mid.label) || '混合后' };
+      out.ratio = str(d.ratio);
+      out.note = str(d.note);
+    } else {
+      out.cards = asArray(d.cards).slice(0, 4).map((c, i) => ({
+        id: str(c.id) || 'c' + (i + 1),
+        title: str(c.title),
+        lines: asArray(c.lines).map(str),
+        color: pickColor(c.color || ['blue', 'orange', 'green', 'purple'][i % 4])
+      }));
+      if (!out.cards.length) out.cards = [{ id: 'c1', title: '题目信息', lines: [''], color: 'blue' }];
+    }
+    return out;
+  }
+
+  function normalize(raw) {
+    const warnings = [];
+    let obj;
+    try { obj = typeof raw === 'string' ? extractJson(raw) : raw; }
+    catch (e) { throw new Error('返回内容不是合法 JSON：' + e.message.slice(0, 80)); }
+    if (!obj || typeof obj !== 'object') throw new Error('返回内容不是对象');
+
+    const meta = obj.meta || {};
+    const grade = U.clamp(parseInt(meta.grade, 10) || 3, 1, 6);
+    const method = meta.method === 'equation' ? 'equation' : 'arithmetic';
+
+    const problem = obj.problem || {};
+    const diagram = normalizeDiagram(obj.diagram);
+
+    const steps = asArray(obj.steps).slice(0, 12).map((s, i) => {
+      const ops = asArray(s.ops).filter((o) => o && OP_TYPES.includes(str(o.op))).map((o) => {
+        const out = { op: str(o.op) };
+        if (o.id) out.id = str(o.id);
+        if (o.ids) out.ids = asArray(o.ids).map(str);
+        if (o.text != null) out.text = str(o.text);
+        if (o.note != null) out.note = str(o.note);
+        return out;
+      });
+      return {
+        n: i + 1,
+        phase: PHASES.includes(str(s.phase)) ? str(s.phase) : (i === 0 ? '理解' : '计算'),
+        title: str(s.title) || '第 ' + (i + 1) + ' 步',
+        text: str(s.text),
+        math: str(s.math),
+        why: str(s.why),
+        tip: str(s.tip),
+        ops,
+        diagram: s.diagram && typeof s.diagram === 'object' ? normalizeDiagram(s.diagram) : null,
+        check: null
+      };
+    });
+    if (!steps.length) throw new Error('模型没有给出讲解步骤');
+
+    const ans = obj.answer || {};
+    const script = {
+      meta: {
+        topic: str(meta.topic) || '数学题',
+        grade,
+        method,
+        unit1: !!meta.unit1,
+        unit1Used: !!meta.unit1Used,
+        gradeFit: ['ok', 'above', 'below'].includes(str(meta.gradeFit)) ? str(meta.gradeFit) : 'ok',
+        note: str(meta.note)
+      },
+      problem: {
+        text: str(problem.text),
+        givens: asArray(problem.givens).slice(0, 6).map((g) => ({
+          name: str(g.name), value: str(g.value), unit: str(g.unit)
+        })),
+        question: str(problem.question)
+      },
+      plan: {
+        headline: str((obj.plan || {}).headline),
+        relation: str((obj.plan || {}).relation)
+      },
+      diagram,
+      steps,
+      answer: {
+        value: str(ans.value),
+        unit: str(ans.unit),
+        sentence: str(ans.sentence)
+      },
+      checks: asArray(obj.checks).map(str).slice(0, 5),
+      warning: str(obj.warning),
+      raw: obj
+    };
+
+    // 图形 id 体检：ops 引用了不存在的 id 时给出提示（不阻断渲染）
+    // 注意：某一步换了图之后，后面的步骤都活在那张新图上
+    let currentIds = collectIds(diagram);
+    const missing = new Set();
+    steps.forEach((s) => {
+      if (s.diagram) currentIds = collectIds(s.diagram);
+      s.ops.forEach((o) => {
+        (o.ids || (o.id ? [o.id] : [])).forEach((id) => {
+          if (id === 'beam' || id === 'tilt') return;
+          if (!currentIds.has(id)) missing.add(id);
+        });
+      });
+    });
+    if (missing.size) warnings.push('图解缺少图元：' + Array.from(missing).join('、'));
+
+    return { script, warnings };
+  }
+
+  function collectIds(d) {
+    const ids = new Set();
+    const add = (x) => { if (x && x.id) ids.add(x.id); };
+    if (d.type === 'segment') { d.parts.forEach(add); if (d.total) add(d.total); if (d.unitOne) add(d.unitOne.id); if (d.question) add(d.question); }
+    if (d.type === 'bars') d.rows.forEach(add);
+    if (d.type === 'balance') { d.left.items.forEach(add); d.right.items.forEach(add); }
+    if (d.type === 'route') { d.travelers.forEach(add); d.marks.forEach(add); }
+    if (d.type === 'table') d.rows.forEach(add);
+    if (d.type === 'numberline') {
+      d.ticks.forEach(add); d.marks.forEach(add);
+      (d.refs || []).forEach(add); (d.spans || []).forEach(add);
+    }
+    if (d.type === 'percentbar') d.rows.forEach((r) => { add(r); r.segments.forEach(add); });
+    if (d.type === 'cross') { d.rows.forEach(add); if (d.mid) add(d.mid); }
+    if (d.type === 'cards') d.cards.forEach(add);
+    return ids;
+  }
+
+  /** 自检：逐条核对算式，并把最终答案与最后一条算式对齐 */
+  function verify(script) {
+    let ok = 0, bad = 0, skip = 0;
+    const results = [];
+    script.steps.forEach((s) => {
+      if (!s.math) { results.push(null); return; }
+      const r = MT.expr.checkMath(s.math);
+      s.check = r.status;
+      results.push(r);
+      if (r.status === 'ok') ok++;
+      else if (r.status === 'bad') bad++;
+      else skip++;
+    });
+
+    // 答案必须能在某一步的算式结果里找到（检验步骤算的是别的量，所以不比对最后一步）
+    let answerCheck = null;
+    if (script.answer.value) {
+      const target = String(script.answer.value).replace(/[^\d.\-/]/g, '');
+      let found = false;
+      results.forEach((r) => {
+        if (!found && r && r.status === 'ok' && r.value) {
+          if (MT.expr.sameValue(target, r.value.toString()) === true) found = true;
+        }
+      });
+      answerCheck = found ? { ok: true } : { ok: false };
+    }
+    return { ok, bad, skip, results, answerCheck, total: ok + bad };
+  }
+
+  /** 兜底图解：把题干变成信息卡片 */
+  function fallbackDiagram(problemText) {
+    return normalizeDiagram({
+      type: 'cards',
+      cards: [
+        { id: 'c1', title: '已知条件', lines: [problemText || '（无）'], color: 'blue' },
+        { id: 'c2', title: '要解决的问题', lines: ['见下方讲解步骤'], color: 'orange' }
+      ]
+    });
+  }
+
+  MT.schema = {
+    normalize, verify, extractJson, fallbackDiagram,
+    DIAGRAM_TYPES, OP_TYPES, PHASES
+  };
+})();
+
+
+/* ==================== 40-prompt.js ==================== */
+/* 40-prompt.js —— 智能体的「大脑」：角色、约束、图解 DSL、范例 */
+(function () {
+  const MT = (window.MT = window.MT || {});
+
+  const GRADE_NAME = { 1: '一年级', 2: '二年级', 3: '三年级', 4: '四年级', 5: '五年级', 6: '六年级' };
+
+  const DSL_DOC = `## 图解 DSL（diagram）
+每道题**必须**给出一张图，图是讲解的主线。可选类型与字段：
+
+1. segment 线段图（最常用：份数、分数、百分数、倍比、部分与整体）
+{"type":"segment","title":"总钱数",
+ "parts":[{"id":"a","ratio":4,"label":"小明","value":"48元","color":"blue"},
+          {"id":"b","ratio":3,"label":"小红","value":"?","color":"orange"}],
+ "total":{"id":"total","label":"一共","value":"?元"},
+ "unitOne":{"id":"a","label":"1"},
+ "question":{"id":"q","label":"一共多少元？"}}
+ ratio 是这一段的份数（决定长短），颜色可选 blue/orange/green/purple/amber。
+
+2. bars 份数方块图（和差倍、倍数比较：一段就是若干个方块）
+{"type":"bars","unit":"份","rows":[{"id":"r1","label":"甲","ratio":1,"value":"?"},
+                                   {"id":"r2","label":"乙","ratio":3,"value":"?"}]}
+
+3. balance 天平图（方程、等量关系；左右两边必须相等才平衡）
+{"type":"balance","left":{"label":"3x + 5","items":[{"id":"l1","text":"3 个 x"},{"id":"l2","text":"+5"}]},
+ "right":{"label":"26","items":[{"id":"r1","text":"26"}]},"hint":"两边同时减 5"}
+
+4. area 平面图形（面积、周长）
+{"type":"area","shape":"rect|triangle|parallelogram|trapezoid|circle|composite",
+ "dims":{"w":8,"h":5,"b":6,"b2":4,"r":3},"unit":"厘米",
+ "labels":{"bottom":"8 厘米","left":"5 厘米"},"formula":"8 × 5 = 40（平方厘米）"}
+
+5. solid 立体图形（体积、表面积）
+{"type":"solid","shape":"cuboid|cube|cylinder|cone","dims":{"l":5,"w":3,"h":4,"r":2},"unit":"厘米",
+ "formula":"5 × 3 × 4 = 60（立方厘米）"}
+
+6. route 行程图（相遇、追及、往返）
+{"type":"route","length":300,"unit":"千米",
+ "travelers":[{"id":"a","name":"甲车","pos":0,"dir":1,"speed":"60 千米/时","color":"blue"},
+              {"id":"b","name":"乙车","pos":300,"dir":-1,"speed":"40 千米/时","color":"orange"}],
+ "marks":[{"id":"m1","at":0,"label":"A 地"},{"id":"m2","at":300,"label":"B 地"}]}
+
+7. table 表格（鸡兔同笼枚举、数据整理、对比）
+{"type":"table","cols":[{"key":"a","label":"鸡"},{"key":"b","label":"兔"},{"key":"c","label":"脚"}],
+ "rows":[{"id":"row1","cells":["8","0","16"]}]}
+
+8. numberline 数量轴（分数、小数、正负、折扣、盈亏、和差——凡是"几个量排在同一条线上比较"）
+{"type":"numberline","min":0.75,"max":1.02,
+ "ticks":[{"id":"t8","value":0.8,"label":"八折"},{"id":"t9","value":0.9,"label":"九折"},{"id":"t10","value":1,"label":"定价"}],
+ "marks":[{"id":"m1","value":0.75,"label":"成本","color":"green"}],
+ "refs":[{"id":"cost","at":0.8167,"label":"成本 4900 元","color":"green"}],
+ "spans":[{"id":"s1","from":0.8,"to":0.9,"label":"相差 600 元 = 定价的 10%","color":"orange"}]}
+ ticks 是刻度，marks 是图钉，refs 是竖虚线参考线（成本线、平均线），spans 是两点之间的区间括号。
+
+9. percentbar 浓度条 / 占比条（浓度、含水率、完成比例——只要"总量由几部分按百分比拼成"）
+{"type":"percentbar","title":"乙容器里的溶液","rows":[
+  {"id":"yi","label":"乙容器","total":"24 kg","segments":[
+     {"id":"yi-a","pct":25,"label":"酒精 6 kg","color":"orange"},
+     {"id":"yi-w","pct":75,"label":"水 18 kg","color":"blue"}]}],
+ "note":"水从头到尾都是 18 kg"}
+ 🎯 浓度题的命门是"谁没变"：把不变的那个量标出来，用它的占比反推总量。
+
+10. cross 十字交叉（两种浓度的溶液配成一种、求质量比）
+{"type":"cross","title":"配成 65%","rows":[
+   {"id":"r1","label":"纯酒精","value":"100%","share":"40 份","color":"orange"},
+   {"id":"r2","label":"乙溶液","value":"25%","share":"35 份","color":"blue"}],
+ "mid":{"id":"mid","value":"65%","label":"混合后"},"ratio":"40 : 35 = 8 : 7","note":"4 kg 对应 8 份，1 份 0.5 kg"}
+ 写法：每行的份数 = 自己浓度与混合浓度之差的绝对值（100−65=35 写在 25% 行，65−25=40 写在 100% 行），
+ 两行份数比就是两边的质量比。
+
+11. cards 信息卡（纯文字提示、非图形题兜底）
+{"type":"cards","cards":[{"id":"c1","title":"已知","lines":["小明 48 元","小红是小明的 3/4"],"color":"blue"}]}
+
+## 图形动作（steps[].ops）
+每一步用 ops 让图「动」起来，只能使用下面 7 种，id 必须来自 diagram：
+{"op":"focus","ids":["a"],"text":"先看小明这一份"}  高亮 + 气泡说明（text 可省略）
+{"op":"dim","ids":["b"]}                              压暗其它部分
+{"op":"show","ids":["q"]}    / {"op":"hide","ids":["q"]}
+{"op":"set","id":"val-b","text":"36 元"}              改写某个标注
+{"op":"mark","id":"val-b","text":"✓"}                 在旁边打标记
+{"op":"pulse","ids":["total"]}                        轻轻跳动强调
+每一步至少有 1 个 op；没有图形可动时用 focus 指向最相关的部分。
+
+## 换图（一节课里可以换画面）
+有时两步看的不是同一件事：浓度题第一步看"乙容器的浓度条"，第三步要换成"十字交叉"。
+这时在需要换图的那一步里加一个 diagram 字段（结构跟顶层 diagram 完全一样），播放器会自动切画面：
+"steps":[{"n":1,...,"ops":[...]},{"n":2,"diagram":{...十字交叉...},"ops":[引用新图的 id]}]
+规则：换图那一步的 ops 引用新图的 id；换图之后的所有步骤都在新图上；一个 lesson 最多换 2 次图。`;
+
+  /* 教学法内核：来自线段图课例、新加坡 bar model、单位 1 教学共识 */
+  const PEDAGOGY = `## 教学法内核（必须遵循）
+A. 读题三步：① 圈出问题要问什么；② 给每个对象起一个短名字；③ 把每个条件改写成一句短话，
+   保留完整关系——"比乙多 12"里的 12 是**差**，不是甲的总量；"是乙的 3 倍"里的 3 是**份数**，不是多出 3 个。
+B. 先图后式：一步图、一句关系、一个算式。禁止出现"图上找不到依据"的运算。
+C. 条件与图的对应（选图时照这张表）：
+   - "一共 / 合计" → 几段拼成一段（segment 的 parts + total）
+   - "比……多 / 少" → 两条左端对齐的线段，多出的那一截单独标出（segment 或 bars）
+   - "是……的几倍 / 几分之几" → 相同长度的一份 + 份数（bars 最直观）
+   - "拿走 / 剩下 / 变化前后" → 两组图或分时刻标注，不要混在一条线上
+   - "相遇 / 追及 / 相距" → route 行程图
+   - "面积 / 周长 / 体积" → area / solid，公式要能从图上看出来
+   - "鸡兔同笼 / 枚举" → table
+D. 画图规范：同一题里，相等关系、长短关系、标注必须自洽；线段长度按份数成比例（ratio 就是份数）；
+   每个数字都要有明确对象，不能把"差"标在整体上。
+E. 讲完必须回头验：把答案代回**每一个**条件（不只是总数）。验收的 checks 里要覆盖到差、倍、总数。
+F. 不是所有题都适合线段图：分类计数、位置、图形变换类，改用 table / cards，别硬套。
+G. 认知顺序走 CPA：先具体（钱、格子、路程）→ 再图示（线段、天平）→ 最后抽象（算式）。`;
+
+  const RULES = `## 硬性规则
+1. 只输出一个 JSON 对象，不要 Markdown 代码块，不要任何解释文字。
+2. 步骤 3–6 步，phase 依次用「理解 / 关系 / 列式 / 计算 / 检验」中的词。
+3. text 要像面对面跟小学生说话：一句话讲清一件事，最多两句，不要堆术语。
+4. math 写这一步的算式，用 = 连接，例如 "48 × 3/4 = 36"。算术解里**不许出现字母**。
+5. 每步的 ops 必须引用 diagram 里真实存在的 id；没图可动就 focus 相关部分。
+6. answer.value 只写数字或分数（如 "84"、"7/4"），单位写在 unit 里。
+7. checks 写 2–3 条验算，必须是真的能算通的等式（会逐条自动核对，算错会被标红）。
+8. 先在心里把答案算准，再组织步骤；拿不准就换一种更简单的算法，绝不编造。
+9. 图解要服务于理解：线段图看份数，天平看等量关系，面积图看公式从哪来。
+10. 题目以图片给出时：先看清图上的数字、单位、图形标注再动笔；几何题必须按图上给的数据画图，
+    并把"这个数是从图上哪里看到的"讲出来；看不清就别猜，写进 warning。`;
+
+  const GRADE_RULES = `## 年级适配（meta.grade）
+一年级：只用图形和实物图，不出现分数、小数、字母、乘除算式，用「合起来 / 拿走 / 还剩」表达。
+二年级：加减乘除口诀范围，可用简单线段图，不出现字母和分数。
+三年级：线段图、份数、面积与周长，分数只认「几分之一」的直观含义。
+四年级：四则运算、运算定律、长方形/正方形面积，可用简单方程思想（用 □ 表示未知）。
+五年级：简易方程（可用 x）、分数加减、长方体正方体体积。
+六年级：分数乘除、百分数、比、圆、圆柱圆锥，单位 1 是主武器。`;
+
+  const METHOD_RULES = `## 解法（meta.method）
+arithmetic 算术解：从条件出发，先求出"一份是多少 / 单位 1 是多少"，再求问题。用分步算式或综合算式，全程不出现 x。
+equation 方程解：先设 Unknown 为 x（写清"设……为 x"），再找等量关系列方程，然后按等式性质一步步解，最后把答案代回原题检验。方程题优先用 balance 天平图。`;
+
+  const UNIT1_RULES = `## 单位 1（meta.unit1 / meta.unit1Used）
+单位 1 只用于分数、百分数、倍比、比这类"谁是谁的几分之几"的题。
+
+找单位 1 的三条硬规则（按顺序用）：
+1) 部分与总数：总数是单位 1。"吃了总数的 2/5" —— 总数是单位 1。
+2) 两个量相比：看关键句里"比 / 占 / 是 / 相当于 / 的"后面跟着谁，谁就是单位 1。
+   "男生比女生多 1/2" → 女生是单位 1；"宽是长的 5/12" → 长是单位 1。
+3) 原数量与现数量：**原来的量**是单位 1。"水结成冰体积增加 1/10" → 水的体积是单位 1。
+
+讲解顺序：找单位 1（图上 unitOne 标出来）→ 另一个量是它的几分之几 → 合起来是 1 ± 几分之几
+→ 已知部分求整体用除法，已知整体求部分用乘法。
+
+如果本题是几何、行程、整数和差倍等**与单位 1 无关**的题型：unit1Used 设为 false，
+并在 meta.note 里写一句"本题不涉及单位 1，已自动忽略该选项"，讲解照常进行。`;
+
+  function systemPrompt() {
+    return `你是一位很会画图的小学数学老师，专门把题目讲给「家长 + 小孩」一起看。
+你的拿手好戏是：先画一张图，再顺着图一步步把算式长出来。孩子看完能指着图说出"为什么要这样算"。
+
+${PEDAGOGY}
+
+${RULES}
+
+${GRADE_RULES}
+
+${METHOD_RULES}
+
+${UNIT1_RULES}
+
+${DSL_DOC}
+
+## 输出结构
+{
+  "meta": {"topic":"题型名，如 分数应用题·求总量","grade":6,"method":"arithmetic","unit1":true,"unit1Used":true,"gradeFit":"ok","note":""},
+  "problem": {"text":"原题","givens":[{"name":"小明","value":"48","unit":"元"}],"question":"两个人一共多少元？"},
+  "plan": {"headline":"把小明看作单位 1","relation":"总数 = 小明 × (1 + 3/4)"},
+  "diagram": { ... 见上方 DSL ... },
+  "steps": [{"phase":"理解","title":"先看清楚谁是谁","text":"…","math":"","why":"点开「为什么」时给的补充","ops":[{"op":"focus","ids":["a"],"text":"…"}]}],
+  "answer": {"value":"84","unit":"元","sentence":"两个人一共有 84 元。"},
+  "checks": ["48 × 3/4 = 36","48 + 36 = 84"],
+  "warning": ""
+}
+gradeFit：题目明显超出所选年级时填 "above"，明显低于时填 "below"，一般填 "ok"。
+
+## 三个范例
+
+### 范例 A（分数 + 单位 1 + 算术解，六年级）
+题目：小明有 48 元，小红的钱是小明的 3/4，两个人一共有多少元？
+{"meta":{"topic":"分数应用题·已知部分求总量","grade":6,"method":"arithmetic","unit1":true,"unit1Used":true,"gradeFit":"ok","note":""},
+"problem":{"text":"小明有 48 元，小红的钱是小明的 3/4，两个人一共有多少元？","givens":[{"name":"小明","value":"48","unit":"元"},{"name":"小红","value":"小明的 3/4","unit":""}],"question":"两个人一共有多少元？"},
+"plan":{"headline":"把小明的钱看作单位 1","relation":"总数 = 小明的 48 元 × (1 + 3/4)"},
+"diagram":{"type":"segment","title":"两个人的钱","parts":[{"id":"a","ratio":4,"label":"小明","value":"48 元","color":"blue"},{"id":"b","ratio":3,"label":"小红","value":"? 元","color":"orange"}],"total":{"id":"total","label":"一共","value":"? 元"},"unitOne":{"id":"a","label":"1"},"question":{"id":"q","label":"一共多少元？"}},
+"steps":[
+{"phase":"理解","title":"先看清楚谁的钱是单位 1","text":"小明有 48 元，小红的钱是小明的 3/4。把小明这一整段看成「1」，小红就是其中的 3 份。","math":"","why":"「是……的 3/4」里，「的」字后面的量就是单位 1。","ops":[{"op":"focus","ids":["a"],"text":"这一整段是单位 1"},{"op":"dim","ids":["b"]}]},
+{"phase":"关系","title":"合起来是几分之几","text":"一段是小明，一段是小红，合起来就是 1 + 3/4 = 7/4 个「小明」。","math":"1 + 3/4 = 7/4","why":"4 份加 3 份，共 7 份，所以是 7/4。","ops":[{"op":"focus","ids":["a","b"],"text":"合起来 7 份"},{"op":"set","id":"total","text":"7 份"}]},
+{"phase":"列式","title":"求出 1 份是多少","text":"小明 48 元正好是 4 份，那 1 份就是 48 ÷ 4 = 12 元。","math":"48 ÷ 4 = 12","why":"把 48 元平均分成 4 份，每份就是 12 元。","ops":[{"op":"focus","ids":["a"],"text":"4 份 = 48 元"},{"op":"set","id":"b","text":"3 份"}]},
+{"phase":"计算","title":"小红的钱","text":"小红是 3 份，12 × 3 = 36 元，也就是 48 × 3/4 = 36 元。","math":"48 × 3/4 = 36","why":"求一个数的几分之几，用乘法。","ops":[{"op":"set","id":"val-b","text":"36 元"},{"op":"mark","id":"val-b","text":"✓"}]},
+{"phase":"计算","title":"两个人合起来","text":"48 + 36 = 84，两个人一共 84 元。","math":"48 + 36 = 84","why":"也可以直接用 48 × 7/4 = 84，一步算出总数。","ops":[{"op":"set","id":"total","text":"84 元"},{"op":"pulse","ids":["total"]}]},
+{"phase":"检验","title":"回头看一遍","text":"84 − 48 = 36，36 ÷ 48 = 3/4，和小红是小明的 3/4 完全对得上。","math":"84 - 48 = 36","why":"把答案代回题目，条件都成立，说明算对了。","ops":[{"op":"mark","id":"total","text":"✓"},{"op":"focus","ids":["total"]}]}
+],
+"answer":{"value":"84","unit":"元","sentence":"两个人一共有 84 元。"},
+"checks":["48 × 3/4 = 36","48 + 36 = 84","84 - 48 = 36"],"warning":""}
+
+### 范例 B（简易方程 + 天平，五年级）
+题目：一个数的 3 倍再加 5，结果是 26，这个数是多少？
+{"meta":{"topic":"简易方程·逆推","grade":5,"method":"equation","unit1":false,"unit1Used":false,"gradeFit":"ok","note":"本题不涉及单位 1，已自动忽略该选项"},
+"problem":{"text":"一个数的 3 倍再加 5，结果是 26，这个数是多少？","givens":[{"name":"某个数","value":"x","unit":""}],"question":"这个数是多少？"},
+"plan":{"headline":"设这个数为 x，把题目的意思写成等式","relation":"3x + 5 = 26"},
+"diagram":{"type":"balance","left":{"label":"3x + 5","items":[{"id":"l1","text":"3 个 x"},{"id":"l2","text":"+ 5"}]},"right":{"label":"26","items":[{"id":"r1","text":"26"}]},"hint":"左边右边一样重"},
+"steps":[
+{"phase":"理解","title":"把话翻译成式子","text":"不知道的这个数，我们就叫它 x。它的 3 倍再加 5，等于 26。","math":"","why":"用字母代替不知道的数，题目就变成了一道等式。","ops":[{"op":"focus","ids":["l1","l2"],"text":"3x + 5"}]},
+{"phase":"关系","title":"天平要保持平衡","text":"左边是 3x + 5，右边是 26，两边一样重。","math":"3x + 5 = 26","why":"等号就像天平，两边同时做同样的事，天平还是平的。","ops":[{"op":"focus","ids":["l1","l2","r1"],"text":"两边相等"},{"op":"pulse","ids":["l1","l2","r1"]}]},
+{"phase":"列式","title":"两边同时减去 5","text":"左边去掉 5，右边也去掉 5，剩下 3x = 21。","math":"26 - 5 = 21","why":"要把 5 抵消掉，就得两边同时减 5。","ops":[{"op":"hide","ids":["l2"]},{"op":"set","id":"r1","text":"21"}]},
+{"phase":"计算","title":"两边同时除以 3","text":"3 个 x 是 21，那 1 个 x 就是 21 ÷ 3 = 7。","math":"21 / 3 = 7","why":"3 份是 21，求 1 份就用除法。","ops":[{"op":"set","id":"l1","text":"x"},{"op":"focus","ids":["l1"],"text":"x = 7"}]},
+{"phase":"检验","title":"代回去看看","text":"3 × 7 + 5 = 26，正好等于题目说的结果。","math":"3 * 7 + 5 = 26","why":"把 x = 7 放回原式，等式成立就说明解对了。","ops":[{"op":"mark","id":"l1","text":"✓"},{"op":"focus","ids":["l1","r1"]}]}
+],
+"answer":{"value":"7","unit":"","sentence":"这个数是 7。"},
+"checks":["26 - 5 = 21","21 / 3 = 7","3 * 7 + 5 = 26"],"warning":""}
+
+### 范例 C（几何 + 不涉及单位 1，四年级）
+题目：一个长方形长 8 厘米，宽 5 厘米，面积是多少？
+{"meta":{"topic":"长方形面积","grade":4,"method":"arithmetic","unit1":false,"unit1Used":false,"gradeFit":"ok","note":"本题是几何题，不涉及单位 1，已自动忽略该选项"},
+"problem":{"text":"一个长方形长 8 厘米，宽 5 厘米，面积是多少？","givens":[{"name":"长","value":"8","unit":"厘米"},{"name":"宽","value":"5","unit":"厘米"}],"question":"面积是多少平方厘米？"},
+"plan":{"headline":"面积 = 长 × 宽，可以数格子看","relation":"长方形面积 = 长 × 宽"},
+"diagram":{"type":"area","shape":"rect","dims":{"w":8,"h":5},"unit":"厘米","labels":{"bottom":"8 厘米","left":"5 厘米"},"formula":"8 × 5 = 40（平方厘米）"},
+"steps":[
+{"phase":"理解","title":"面积是占多大一片","text":"长 8 厘米、宽 5 厘米，就是要铺满一片 8 列、5 行的小方格。","math":"","why":"1 平方厘米的小方格，正好能铺满这个长方形。","ops":[{"op":"focus","ids":["rect"],"text":"8 列 × 5 行"}]},
+{"phase":"关系","title":"格子总数就是面积","text":"一行 8 个格子，一共 5 行，所以是 8 × 5 个格子。","math":"8 * 5 = 40","why":"每行一样多，求几个几，用乘法。","ops":[{"op":"pulse","ids":["rect"]}]},
+{"phase":"计算","title":"算出结果","text":"8 × 5 = 40，面积是 40 平方厘米。","math":"8 * 5 = 40","why":"面积单位是平方厘米，不要写成厘米。","ops":[{"op":"mark","id":"rect","text":"40 平方厘米"}]},
+{"phase":"检验","title":"换个方向数","text":"5 × 8 = 40，横着数竖着数都一样。","math":"5 * 8 = 40","why":"乘法交换律，说明结果可靠。","ops":[{"op":"focus","ids":["rect"]}]}
+],
+"answer":{"value":"40","unit":"平方厘米","sentence":"这个长方形的面积是 40 平方厘米。"},
+"checks":["8 * 5 = 40","5 * 8 = 40"],"warning":""}
+
+### 范例 D（浓度题 + 中途换图，六年级）
+题目：甲容器有纯酒精 10 kg，乙容器有水 18 kg。先从甲倒一部分酒精到乙；再从乙倒一部分溶液回甲。这时甲含酒精 65%，乙含酒精 25%。第二次从乙倒了多少千克？
+{"meta":{"topic":"浓度问题·倒来倒去","grade":6,"method":"arithmetic","unit1":false,"unit1Used":false,"gradeFit":"above","note":"这是一道奥数浓度题"},
+"problem":{"text":"甲容器有纯酒精 10 kg，乙容器有水 18 kg。先从甲倒一部分酒精到乙；再从乙倒一部分溶液回甲。这时甲含酒精 65%，乙含酒精 25%。第二次从乙倒了多少千克？","givens":[{"name":"甲","value":"纯酒精 10","unit":"kg"},{"name":"乙","value":"水 18","unit":"kg"}],"question":"第二次从乙倒了多少千克溶液？"},
+"plan":{"headline":"水一点没变，先用它算出乙的总量","relation":"乙总量 = 18 ÷ 75%，再按 40 : 35 分配"},
+"diagram":{"type":"percentbar","title":"乙容器里的溶液","rows":[{"id":"yi","label":"乙容器","total":"? kg","segments":[{"id":"yi-a","pct":25,"label":"酒精 ?","color":"orange"},{"id":"yi-w","pct":75,"label":"水 18 kg","color":"blue"}]}],"note":"水从头到尾都是 18 kg"},
+"steps":[
+{"phase":"理解","title":"先找那个没变的东西","text":"乙容器里的水，从头到尾都是 18 kg。后来乙的浓度是 25%，说明水占了 75%。","math":"","why":"倒进倒出，水既没增加也没减少，这是破题的钥匙。","ops":[{"op":"focus","ids":["yi-w"],"text":"水一直没变"},{"op":"dim","ids":["yi-a"]}]},
+{"phase":"计算","title":"用水的占比反推乙的总量","text":"18 ÷ 75% = 24，乙里一共 24 kg；酒精就是 24 − 18 = 6 kg。甲剩 10 − 6 = 4 kg。","math":"18 / 0.75 = 24","why":"水占 75%，18 kg 对应 75%，求整体用除法。","ops":[{"op":"set","id":"yi","text":"24 kg"},{"op":"set","id":"yi-a","text":"酒精 6 kg"}]},
+{"phase":"关系","title":"换个视角：十字交叉","text":"现在甲里是 4 kg 纯酒精，要配上 25% 的溶液，配成 65%。","math":"10 - 6 = 4","why":"两瓶不同浓度的东西倒在一起，用十字交叉算质量比最快。","ops":[{"op":"focus","ids":["r1","r2"],"text":"100% 和 25% 配成 65%"}],
+ "diagram":{"type":"cross","title":"配成 65%","rows":[{"id":"r1","label":"纯酒精","value":"100%","share":"40 份","color":"orange"},{"id":"r2","label":"乙溶液","value":"25%","share":"35 份","color":"blue"}],"mid":{"id":"mid","value":"65%","label":"混合后"},"ratio":"40 : 35 = 8 : 7","note":"4 kg 对应 8 份，每份 0.5 kg"}},
+{"phase":"列式","title":"份数比就是质量比","text":"100 和 65 差 35，65 和 25 差 40，所以纯酒精 : 溶液 = 40 : 35 = 8 : 7。","math":"","why":"交叉相减，得到的两个差就是两边的份数。","ops":[{"op":"focus","ids":["r1"],"text":"40 份"},{"op":"focus","ids":["r2"],"text":"35 份"},{"op":"pulse","ids":["mid"]}]},
+{"phase":"计算","title":"按份数求出答案","text":"4 kg 对应 8 份，1 份就是 0.5 kg，7 份就是 3.5 kg。","math":"4 / 8 * 7 = 3.5","why":"先求 1 份，再乘份数，这是份数问题的老套路。","ops":[{"op":"set","id":"r2","text":"3.5 kg"},{"op":"mark","id":"r2","text":"✓"}]},
+{"phase":"检验","title":"代回去看浓度","text":"甲最后 7.5 kg，酒精 4 + 0.875 = 4.875 kg，4.875 ÷ 7.5 = 65%，正好对得上。","math":"4.875 / 7.5 = 0.65","why":"浓度 = 酒精 ÷ 溶液总量，两边都要回到 65% 和 25%。","ops":[{"op":"focus","ids":["mid"]},{"op":"mark","id":"mid","text":"✓"}]}
+],
+"answer":{"value":"3.5","unit":"千克","sentence":"第二次从乙倒了 3.5 千克溶液。"},
+"checks":["18 / 0.75 = 24","24 - 18 = 6","4 / 8 * 7 = 3.5","4.875 / 7.5 = 0.65"],"warning":""}`;
+  }
+
+  function buildUserPrompt(opts) {
+    const { problem, grade, method, unit1, hasImage } = opts;
+    const methodText = method === 'equation'
+      ? '方程解（设未知数为 x，列等式，用等式性质解方程，最后代回检验）'
+      : '算术解（从条件出发求一份/单位 1，全程不出现 x）';
+    const unitText = unit1
+      ? '使用「单位 1」：如果题目涉及分数、百分数、倍比，请突出单位 1 的找法与用法；如果题目与单位 1 无关，请把 unit1Used 设为 false，并在 meta.note 说明已忽略。'
+      : '不使用「单位 1」：用更直观的份数、线段或公式讲，不要在步骤里提"单位 1"。';
+
+    const imageBlock = hasImage ? `
+
+【注意：题目以图片给出】
+- 先把图上的条件**读全**：每个数字、单位、题号、"多/少/倍/占"这些关系词。
+- 如果图里有几何图形（长方形、三角形、圆、长方体、圆柱……），把图上标注的边长、半径、高
+  如实写进 area / solid 的 dims 里，并在讲解中指出"这个数是从图上哪儿看到的"。
+- 图里确实看不清的地方不要猜，写进 warning。
+- problem.text 里请把题目完整转写一遍，方便家长核对。` : '';
+
+    return `【题目】
+${problem || '（题目在图片里，请先读图）'}
+${imageBlock}
+【本次设置】
+- 学生年级：${GRADE_NAME[grade] || grade + '年级'}（meta.grade 填 ${grade}）
+- 解法：${methodText}
+- 单位 1：${unitText}
+
+【额外要求】
+- 先判断题目类型，再选最合适的图解类型（能画线段就不画文字）。
+- 图里的每个数字都要能在题目里找到依据，不要凭空加条件。
+- 讲解口吻：像老师在孩子旁边指着图讲，不要写成教科书。
+- 只输出 JSON 对象本身。`;
+  }
+
+  /** 追问：返回 {text, focus:[ids]}，让回答也能指回图上 */
+  function buildAskPrompt(script, question) {
+    const stepsBrief = script.steps.map((s) => `第${s.n}步 【${s.title}】${s.text}${s.math ? ' 算式：' + s.math : ''}`).join('\n');
+    const ids = MT.schema && script.diagram ? (function () {
+      const d = script.diagram;
+      const out = [];
+      if (d.type === 'segment') { d.parts.forEach((p) => out.push(p.id + '：' + p.label)); if (d.total) out.push(d.total.id + '：' + d.total.label); }
+      if (d.type === 'bars') d.rows.forEach((r) => out.push(r.id + '：' + r.label));
+      if (d.type === 'balance') { d.left.items.forEach((i) => out.push(i.id + '：' + i.text)); d.right.items.forEach((i) => out.push(i.id + '：' + i.text)); }
+      if (d.type === 'cards') d.cards.forEach((c) => out.push(c.id + '：' + c.title));
+      return out.join('；');
+    })() : '';
+
+    return `这是一个已经讲完的题目，家长或孩子有追问。请用最通俗的话回答，像一个耐心的老师。
+
+【原题】${script.problem.text}
+【图解】${script.diagram.type}（图元 id：${ids}）
+【讲解步骤】
+${stepsBrief}
+【最终答案】${script.answer.sentence}
+
+【追问】${question}
+
+请只输出 JSON：{"text":"回答，2–3 句，口语化，可以打比方","focus":["最多两个图元 id，没有就空数组"],"step":步骤编号或 0}
+text 里不要用 Markdown，不要超过 90 个字。`;
+  }
+
+  MT.prompt = { systemPrompt, buildUserPrompt, buildAskPrompt, GRADE_NAME };
+})();
+
+
+/* ==================== 45-demo.js ==================== */
+/* 45-demo.js —— 内置示例：没配置 Key 也能先看效果；同时用作回归测试 */
+(function () {
+  const MT = (window.MT = window.MT || {});
+
+  const demo = {
+    meta: {
+      topic: '分数应用题 · 已知部分求总量', grade: 6, method: 'arithmetic',
+      unit1: true, unit1Used: true, gradeFit: 'ok', note: ''
+    },
+    problem: {
+      text: '小明有 48 元，小红的钱是小明的 3/4，两个人一共有多少元？',
+      givens: [
+        { name: '小明', value: '48', unit: '元' },
+        { name: '小红', value: '小明的 3/4', unit: '' }
+      ],
+      question: '两个人一共有多少元？'
+    },
+    plan: { headline: '把小明的钱看作单位 1', relation: '总数 = 48 × (1 + 3/4)' },
+    diagram: {
+      type: 'segment',
+      title: '两个人的钱',
+      parts: [
+        { id: 'a', ratio: 4, label: '小明', value: '48 元', color: 'blue' },
+        { id: 'b', ratio: 3, label: '小红', value: '? 元', color: 'orange' }
+      ],
+      total: { id: 'total', label: '一共', value: '? 元' },
+      unitOne: { id: 'a', label: '1' },
+      question: { id: 'q', label: '一共多少元？' }
+    },
+    steps: [
+      {
+        phase: '理解', title: '先看清楚谁的钱是单位 1',
+        text: '小明有 48 元，小红的钱是小明的 3/4。把小明这一整段看成「1」，小红就是其中的 3 份。',
+        math: '', why: '「是……的 3/4」里，「的」字后面的量就是单位 1。',
+        ops: [{ op: 'focus', ids: ['a'], text: '这一整段是单位 1' }, { op: 'dim', ids: ['b'] }]
+      },
+      {
+        phase: '关系', title: '合起来是几分之几',
+        text: '一段是小明，一段是小红，合起来就是 1 + 3/4 = 7/4 个「小明」。',
+        math: '1 + 3/4 = 7/4', why: '4 份加 3 份，一共 7 份，所以是 7/4。',
+        ops: [{ op: 'focus', ids: ['a', 'b'], text: '合起来 7 份' }, { op: 'set', id: 'total', text: '7 份' }]
+      },
+      {
+        phase: '列式', title: '求出 1 份是多少',
+        text: '小明 48 元正好是 4 份，那 1 份就是 48 ÷ 4 = 12 元。',
+        math: '48 ÷ 4 = 12', why: '把 48 元平均分成 4 份，每份就是 12 元。',
+        ops: [{ op: 'focus', ids: ['a'], text: '4 份 = 48 元' }, { op: 'set', id: 'b', text: '3 份' }]
+      },
+      {
+        phase: '计算', title: '小红的钱',
+        text: '小红是 3 份，12 × 3 = 36 元，也就是 48 × 3/4 = 36 元。',
+        math: '48 × 3/4 = 36', why: '求一个数的几分之几，用乘法。',
+        ops: [{ op: 'set', id: 'b', text: '36 元' }, { op: 'mark', id: 'b', text: '✓' }]
+      },
+      {
+        phase: '计算', title: '两个人合起来',
+        text: '48 + 36 = 84，两个人一共 84 元。',
+        math: '48 + 36 = 84', why: '也可以直接用 48 × 7/4 = 84，一步算出总数。',
+        ops: [{ op: 'set', id: 'total', text: '84 元' }, { op: 'pulse', ids: ['total'] }]
+      },
+      {
+        phase: '检验', title: '回头看一遍',
+        text: '84 − 48 = 36，36 ÷ 48 = 3/4，和小红是小明的 3/4 完全对得上。',
+        math: '84 - 48 = 36', why: '把答案代回题目，条件都成立，说明算对了。',
+        ops: [{ op: 'mark', id: 'total', text: '✓' }, { op: 'focus', ids: ['total'] }]
+      }
+    ],
+    answer: { value: '84', unit: '元', sentence: '两个人一共有 84 元。' },
+    checks: ['48 × 3/4 = 36', '48 + 36 = 84', '84 - 48 = 36'],
+    warning: ''
+  };
+
+  /* 折扣与盈亏：把定价看作单位 1，用数量轴看四个量的位置 */
+  const discount = {
+    meta: { topic: '折扣与盈亏 · 求成本', grade: 6, method: 'arithmetic', unit1: true, unit1Used: true, gradeFit: 'ok', note: '' },
+    problem: {
+      text: '一台电脑，若按定价打九折销售，则可获得利润 500 元；若按定价打八折销售，则会亏损 100 元。这台电脑的成本是多少元？',
+      givens: [{ name: '九折', value: '赚 500', unit: '元' }, { name: '八折', value: '亏 100', unit: '元' }],
+      question: '这台电脑的成本是多少元？'
+    },
+    plan: { headline: '把定价看作单位 1', relation: '定价的 10% = 500 + 100 = 600 元' },
+    diagram: {
+      type: 'numberline', title: '定价、售价与成本', min: 0.75, max: 1.03,
+      ticks: [
+        { id: 't8', value: 0.8, label: '八折' },
+        { id: 't9', value: 0.9, label: '九折' },
+        { id: 't10', value: 1, label: '定价' }
+      ],
+      refs: [{ id: 'cost', at: 0.8167, label: '成本 4900 元', color: 'green' }],
+      spans: [
+        { id: 's1', from: 0.8, to: 0.9, label: '相差 600 元 = 定价的 10%', color: 'orange' },
+        { id: 's2', from: 0.8, to: 0.8167, label: '亏 100', color: 'red' },
+        { id: 's3', from: 0.8167, to: 0.9, label: '赚 500', color: 'green' }
+      ]
+    },
+    steps: [
+      {
+        phase: '理解', title: '定价就是单位 1',
+        text: '九折就是定价的 90%，八折就是定价的 80%。两个售价差多少，全看定价。',
+        math: '', why: '打折都是"按定价的百分之几卖"，所以定价是标准量，也就是单位 1。',
+        ops: [{ op: 'focus', ids: ['t8', 't9'], text: '八折和九折，差 1 折' }, { op: 'hide', ids: ['cost'] }]
+      },
+      {
+        phase: '关系', title: '一折正好是 600 元',
+        text: '九折赚 500，八折亏 100，中间差了 500 + 100 = 600 元——这 600 元就是定价的一折。',
+        math: '500 + 100 = 600', why: '从赚 500 变成亏 100，一共往下掉了 600 元。',
+        ops: [{ op: 'focus', ids: ['s1'], text: '这 1 折 = 600 元' }]
+      },
+      {
+        phase: '列式', title: '定价的 10% 是 600 元',
+        text: '600 ÷ 10% = 6000，定价是 6000 元。',
+        math: '600 / 0.1 = 6000', why: '已知一个数的 10% 是多少，求这个数，用除法。',
+        ops: [{ op: 'set', id: 't10', text: '定价 6000' }, { op: 'focus', ids: ['t10'], text: '定价 6000 元' }, { op: 'pulse', ids: ['t10'] }]
+      },
+      {
+        phase: '计算', title: '用九折倒推成本',
+        text: '九折卖 6000 × 90% = 5400 元，赚 500，所以成本是 5400 − 500 = 4900 元。',
+        math: '6000 * 0.9 - 500 = 4900', why: '成本 = 售价 − 利润，售价 = 定价 × 折扣。',
+        ops: [{ op: 'set', id: 't9', text: '九折 5400' }, { op: 'show', ids: ['cost'] }, { op: 'focus', ids: ['cost'], text: '成本落在这' }, { op: 'mark', id: 't9', text: '5400' }]
+      },
+      {
+        phase: '检验', title: '八折真的亏 100 吗',
+        text: '八折卖 4800 元，4800 − 4900 = −100，正好亏 100 元，和题目对得上。',
+        math: '6000 * 0.8 - 4900 = -100', why: '两个条件都验一遍，答案才靠谱。',
+        ops: [{ op: 'set', id: 't8', text: '八折 4800' }, { op: 'focus', ids: ['s2'], text: '亏 100' }, { op: 'pulse', ids: ['cost'] }]
+      }
+    ],
+    answer: { value: '4900', unit: '元', sentence: '这台电脑的成本是 4900 元。' },
+    checks: ['500 + 100 = 600', '600 / 0.1 = 6000', '6000 * 0.9 - 500 = 4900', '6000 * 0.8 - 4900 = -100'],
+    warning: ''
+  };
+
+  /* 浓度题：水不变 → 浓度条；配比 → 十字交叉（中途换图） */
+  const solution = {
+    meta: { topic: '浓度问题 · 倒来倒去', grade: 6, method: 'arithmetic', unit1: false, unit1Used: false, gradeFit: 'above', note: '这是一道奥数浓度题' },
+    problem: {
+      text: '甲容器中有纯酒精 10 kg，乙容器中有水 18 kg。第一次将甲容器中的一部分纯酒精倒入乙容器中使酒精与水混合；第二次将乙容器中一部分酒精溶液倒入甲容器中，这时甲容器中溶液的酒精含量为 65%，乙容器中溶液的酒精含量为 25%。第二次从乙容器倒入多少千克酒精溶液到甲容器？',
+      givens: [{ name: '甲', value: '纯酒精 10', unit: 'kg' }, { name: '乙', value: '水 18', unit: 'kg' }],
+      question: '第二次从乙倒入多少千克溶液到甲？'
+    },
+    plan: { headline: '水一点没变，先用它算出乙的总量', relation: '乙总量 = 18 ÷ 75%，再按 40 : 35 分配' },
+    diagram: {
+      type: 'percentbar', title: '乙容器里的溶液', note: '水从头到尾都是 18 kg',
+      rows: [{
+        id: 'yi', label: '乙容器', total: '? kg',
+        segments: [
+          { id: 'yi-a', pct: 25, label: '酒精 ?', color: 'orange' },
+          { id: 'yi-w', pct: 75, label: '水 18 kg', color: 'blue' }
+        ]
+      }]
+    },
+    steps: [
+      {
+        phase: '理解', title: '先找那个没变的东西',
+        text: '乙容器里的水，从头到尾都是 18 kg。后来乙的浓度是 25%，说明水占了 75%。',
+        math: '', why: '倒进倒出，水既没增加也没减少，这是破题的钥匙。',
+        ops: [{ op: 'focus', ids: ['yi-w'], text: '水一直没变' }, { op: 'dim', ids: ['yi-a'] }]
+      },
+      {
+        phase: '计算', title: '用水的占比反推乙的总量',
+        text: '18 ÷ 75% = 24，乙里一共 24 kg；酒精就是 24 − 18 = 6 kg。甲剩下 10 − 6 = 4 kg。',
+        math: '18 / 0.75 = 24', why: '水占 75%，18 kg 对应 75%，求整体用除法。',
+        ops: [{ op: 'set', id: 'yi', text: '24 kg' }, { op: 'set', id: 'yi-a', text: '酒精 6 kg' }, { op: 'mark', id: 'yi-a', text: '6 kg' }]
+      },
+      {
+        phase: '关系', title: '换个视角：十字交叉',
+        text: '现在甲里是 4 kg 纯酒精，要配上 25% 的溶液，配成 65%。',
+        math: '10 - 6 = 4',
+        why: '两瓶不同浓度的东西倒在一起，用十字交叉算质量比最快。',
+        ops: [{ op: 'focus', ids: ['r1', 'r2'], text: '100% 和 25% 配成 65%' }],
+        diagram: {
+          type: 'cross', title: '配成 65%',
+          rows: [
+            { id: 'r1', label: '纯酒精', value: '100%', share: '40 份', color: 'orange' },
+            { id: 'r2', label: '乙溶液', value: '25%', share: '35 份', color: 'blue' }
+          ],
+          mid: { id: 'mid', value: '65%', label: '混合后' },
+          ratio: '40 : 35 = 8 : 7',
+          note: '4 kg 对应 8 份，每份 0.5 kg'
+        }
+      },
+      {
+        phase: '列式', title: '份数比就是质量比',
+        text: '100 和 65 差 35，65 和 25 差 40，所以纯酒精 : 溶液 = 40 : 35 = 8 : 7。',
+        math: '', why: '交叉相减，得到的两个差就是两边的份数。',
+        ops: [{ op: 'focus', ids: ['r1'], text: '40 份' }, { op: 'focus', ids: ['r2'], text: '35 份' }, { op: 'pulse', ids: ['mid'] }]
+      },
+      {
+        phase: '计算', title: '按份数求出答案',
+        text: '4 kg 对应 8 份，1 份就是 0.5 kg，7 份就是 3.5 kg。',
+        math: '4 / 8 * 7 = 3.5', why: '先求 1 份，再乘份数，这是份数问题的老套路。',
+        ops: [{ op: 'set', id: 'r2', text: '3.5 kg' }, { op: 'mark', id: 'r2', text: '✓' }]
+      },
+      {
+        phase: '检验', title: '代回去看浓度',
+        text: '甲最后 7.5 kg，酒精 4 + 0.875 = 4.875 kg，4.875 ÷ 7.5 = 65%，正好对得上。',
+        math: '4.875 / 7.5 = 0.65', why: '浓度 = 酒精 ÷ 溶液总量，两边都要回到 65% 和 25%。',
+        ops: [{ op: 'focus', ids: ['mid'] }, { op: 'mark', id: 'mid', text: '✓' }]
+      }
+    ],
+    answer: { value: '3.5', unit: '千克', sentence: '第二次从乙倒了 3.5 千克溶液。' },
+    checks: ['18 / 0.75 = 24', '24 - 18 = 6', '4 / 8 * 7 = 3.5', '4.875 / 7.5 = 0.65'],
+    warning: ''
+  };
+
+  const examples = [
+    { label: '分数 · 单位1', grade: 6, text: '小明有 48 元，小红的钱是小明的 3/4，两个人一共有多少元？' },
+    { label: '和差问题', grade: 4, text: '甲、乙两盒共有 48 张卡片，甲盒比乙盒多 12 张。两盒各有多少张卡片？' },
+    { label: '鸡兔同笼', grade: 5, text: '笼子里有鸡和兔共 8 只，一共有 26 只脚。鸡和兔各有几只？' },
+    { label: '相遇问题', grade: 5, text: 'A、B 两地相距 300 千米。甲车从 A 地出发，每小时行 60 千米；乙车从 B 地出发，每小时行 40 千米。两车同时相向而行，几小时后相遇？' },
+    { label: '长方形面积', grade: 4, text: '一个长方形的长是 8 厘米，宽是 5 厘米，它的面积是多少平方厘米？' },
+    { label: '圆柱体积', grade: 6, text: '一个圆柱的底面半径是 2 厘米，高是 5 厘米，它的体积是多少立方厘米？' },
+    { label: '简易方程', grade: 5, text: '一个数的 3 倍再加上 5，结果是 26。这个数是多少？' },
+    { label: '折扣盈亏', grade: 6, text: discount.problem.text },
+    { label: '浓度问题', grade: 6, text: solution.problem.text }
+  ];
+
+  MT.demo = { lessons: [demo, discount, solution], examples };
+})();
+
+
+/* ==================== 46-image.js ==================== */
+/* 46-image.js —— 题目图片：压缩后随消息直接交给视觉模型（不做中间转写） */
+(function () {
+  const MT = (window.MT = window.MT || {});
+  const MAX_EDGE = 1400;
+
+  function loadImage(src) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('这张图片浏览器打不开（可能是 HEIC 格式），请换成 JPG / PNG'));
+      img.src = src;
+    });
+  }
+
+  function readAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onload = () => resolve(String(fr.result));
+      fr.onerror = () => reject(new Error('读取图片失败'));
+      fr.readAsDataURL(file);
+    });
+  }
+
+  /** 压到长边 1400px 的 JPEG：省流量，也省 token */
+  async function shrink(file) {
+    const raw = await readAsDataUrl(file);
+    const img = await loadImage(raw);
+    let w = img.naturalWidth || img.width;
+    let h = img.naturalHeight || img.height;
+    const scale = Math.min(1, MAX_EDGE / Math.max(w, h));
+    w = Math.max(1, Math.round(w * scale));
+    h = Math.max(1, Math.round(h * scale));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(img, 0, 0, w, h);
+
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.86);
+    return { dataUrl, w, h, kb: Math.round((dataUrl.length * 0.75) / 1024) };
+  }
+
+  MT.image = { shrink };
+})();
+
+
+/* ==================== 50-llm.js ==================== */
+/* 50-llm.js —— 直连大模型（OpenAI 兼容协议），密钥只存在本机浏览器 */
+(function () {
+  const MT = (window.MT = window.MT || {});
+  const U = MT.util;
+
+  const PRESETS = [
+    {
+      id: 'deepseek', name: 'DeepSeek（推荐）', base: 'https://api.deepseek.com', model: 'deepseek-chat',
+      models: ['deepseek-chat', 'deepseek-reasoner'],
+      vision: '', visionModels: [],
+      note: '浏览器可直连，中文数学讲解稳定，价格便宜。但它看不了图片——拍图讲解请把服务商换成通义千问、硅基流动或 Kimi。'
+    },
+    {
+      id: 'moonshot', name: 'Kimi 月之暗面', base: 'https://api.moonshot.cn/v1', model: 'moonshot-v1-8k',
+      models: ['moonshot-v1-8k', 'moonshot-v1-32k', 'kimi-k2-0711-preview'],
+      vision: 'moonshot-v1-8k-vision-preview', visionModels: ['moonshot-v1-8k-vision-preview', 'moonshot-v1-32k-vision-preview'],
+      note: '浏览器可直连，长题友好，自带识图模型。'
+    },
+    {
+      id: 'dashscope', name: '阿里通义千问', base: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-plus',
+      models: ['qwen-plus', 'qwen-max', 'qwen-turbo'],
+      vision: 'qwen-vl-max', visionModels: ['qwen-vl-max', 'qwen-vl-plus'],
+      note: '浏览器可直连（阿里云百炼，兼容 OpenAI 协议），识图能力强。'
+    },
+    {
+      id: 'siliconflow', name: '硅基流动', base: 'https://api.siliconflow.cn/v1', model: 'Qwen/Qwen2.5-72B-Instruct',
+      models: ['Qwen/Qwen2.5-72B-Instruct', 'deepseek-ai/DeepSeek-V3', 'deepseek-ai/DeepSeek-R1'],
+      vision: 'Qwen/Qwen2.5-VL-72B-Instruct', visionModels: ['Qwen/Qwen2.5-VL-72B-Instruct', 'Qwen/Qwen2.5-VL-32B-Instruct'],
+      note: '浏览器可直连，模型多，自带视觉模型。'
+    },
+    {
+      id: 'openrouter', name: 'OpenRouter', base: 'https://openrouter.ai/api/v1', model: 'deepseek/deepseek-chat',
+      models: ['deepseek/deepseek-chat', 'qwen/qwen-2.5-72b-instruct', 'anthropic/claude-3.5-sonnet'],
+      vision: 'qwen/qwen-2.5-vl-72b-instruct', visionModels: ['qwen/qwen-2.5-vl-72b-instruct', 'google/gemini-2.0-flash-001'],
+      note: '浏览器可直连，可访问多家模型（需要外网）。'
+    },
+    {
+      id: 'custom', name: '自定义（OpenAI 兼容）', base: '', model: '',
+      models: [], vision: '', visionModels: [],
+      note: '任何兼容 /chat/completions 的服务，例如本地 Ollama：http://localhost:11434/v1'
+    }
+  ];
+
+  const DEFAULTS = {
+    provider: 'deepseek',
+    baseUrl: 'https://api.deepseek.com',
+    model: 'deepseek-chat',
+    visionModel: '',
+    apiKey: '',
+    temperature: 0.2,
+    jsonMode: true
+  };
+
+  const LS_KEY = 'config';
+
+  function getConfig() {
+    const saved = U.store.get(LS_KEY, null);
+    return Object.assign({}, DEFAULTS, saved || {});
+  }
+
+  function saveConfig(cfg) {
+    U.store.set(LS_KEY, {
+      provider: cfg.provider,
+      baseUrl: cfg.baseUrl,
+      model: cfg.model,
+      visionModel: cfg.visionModel || '',
+      apiKey: cfg.apiKey,
+      temperature: Number(cfg.temperature),
+      jsonMode: !!cfg.jsonMode
+    });
+  }
+
+  function clearKey() {
+    const cfg = getConfig();
+    cfg.apiKey = '';
+    saveConfig(cfg);
+    return cfg;
+  }
+
+  function isConfigured(cfg) {
+    cfg = cfg || getConfig();
+    return !!(cfg.apiKey && cfg.baseUrl && cfg.model);
+  }
+
+  function endpoint(baseUrl) {
+    let b = String(baseUrl || '').trim().replace(/\/+$/, '');
+    if (!b) throw new Error('还没有填写接口地址');
+    if (b.endsWith('/chat/completions')) return b;
+    return b + '/chat/completions';
+  }
+
+  /** 当前配置下用来"看图"的模型；空字符串表示看不了图 */
+  function visionModelOf(cfg) {
+    cfg = cfg || getConfig();
+    if (cfg.visionModel) return cfg.visionModel;
+    if (/vl|vision|glm-4v|-4o|claude-3|gemini|internvl|pixtral/i.test(cfg.model || '')) return cfg.model;
+    return '';
+  }
+
+  function describeError(err, status, body) {
+    const detail = (body && (body.error && (body.error.message || body.error.code) || body.message)) || '';
+    if (status === 401) return 'API Key 不对或已失效（401）。请到设置里重新粘贴。';
+    if (status === 402) return '账户余额不足（402）。';
+    if (status === 403) return '这个 Key 没有权限，或所在地区被限制（403）。' + detail;
+    if (status === 404) return '接口地址或模型名不对（404）——检查 Base URL 是否要带 /v1。' + detail;
+    if (status === 429) return '请求太频繁或超出额度（429），等一会儿再试。';
+    if (status >= 500) return '服务商暂时出问题（' + status + '），稍后重试。';
+    if (err && /Failed to fetch|NetworkError|load failed/i.test(err.message || '')) {
+      return '连不上服务商：可能是网络问题，或该服务商不允许浏览器直接调用（CORS）。可换 DeepSeek / Kimi / 通义 / 硅基流动。';
+    }
+    if (err && err.name === 'AbortError') return '请求超时了（120 秒），题目可能太长，或网络太慢。';
+    return detail || (err && err.message) || '调用失败';
+  }
+
+  /**
+   * 发一次对话请求
+   * @returns {Promise<string>} 模型返回的文本
+   */
+  async function chat(messages, opts) {
+    opts = opts || {};
+    const cfg = Object.assign({}, getConfig(), opts.config || {});
+    if (!cfg.apiKey) throw new Error('还没有配置 API Key，点右上角「设置」填一下。');
+    const url = endpoint(cfg.baseUrl);
+
+    const body = {
+      model: cfg.model,
+      messages,
+      temperature: Number(cfg.temperature) >= 0 ? Number(cfg.temperature) : 0.2,
+      stream: false
+    };
+    if (cfg.jsonMode && opts.json !== false) body.response_format = { type: 'json_object' };
+
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), opts.timeout || 120000);
+
+    let res;
+    try {
+      res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer ' + cfg.apiKey
+        },
+        body: JSON.stringify(body),
+        signal: ctrl.signal
+      });
+    } catch (e) {
+      clearTimeout(timer);
+      throw new Error(describeError(e));
+    }
+    clearTimeout(timer);
+
+    let data = null;
+    const raw = await res.text();
+    try { data = raw ? JSON.parse(raw) : null; } catch (e) { /* 保留 raw */ }
+
+    if (!res.ok) {
+      // 有些服务商不认 response_format，去掉再试一次
+      if (body.response_format && /response_format|json_object|unsupported/i.test(raw)) {
+        return chat(messages, Object.assign({}, opts, { config: Object.assign({}, cfg, { jsonMode: false }) }));
+      }
+      throw new Error(describeError(null, res.status, data));
+    }
+
+    const content = data && data.choices && data.choices[0] &&
+      (data.choices[0].message && data.choices[0].message.content);
+    if (!content) {
+      if (data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.reasoning_content) {
+        return data.choices[0].message.reasoning_content;
+      }
+      throw new Error('模型没有返回内容（可能被内容策略拦截），换个模型或换个问法。');
+    }
+    return content;
+  }
+
+  /** 连通性测试：发一句极短的话 */
+  async function test(cfg) {
+    const t0 = performance.now();
+    const text = await chat(
+      [{ role: 'user', content: '只回复两个字：可以' }],
+      { config: Object.assign({}, cfg, { jsonMode: false }), timeout: 30000 }
+    );
+    return { ok: true, ms: Math.round(performance.now() - t0), text: String(text).slice(0, 40) };
+  }
+
+  MT.llm = { PRESETS, DEFAULTS, getConfig, saveConfig, clearKey, isConfigured, chat, test, endpoint, visionModelOf };
+})();
+
+
+/* ==================== 55-agent.js ==================== */
+/* 55-agent.js —— 解题智能体：调用 → 解析 → 自检 → 必要时修一次
+   支持题目以图片给出：图片直接随消息发给视觉模型，由它自己看图、读数、建模。 */
+(function () {
+  const MT = (window.MT = window.MT || {});
+  const P = MT.prompt, S = MT.schema, L = MT.llm;
+
+  function clip(text, n) {
+    const s = String(text || '');
+    return s.length > n ? s.slice(0, n) + '\n…（后略）' : s;
+  }
+
+  /** 给多模态 content 追加一句提醒（content 可能是字符串，也可能是 [{type:'text'|'image_url'}]） */
+  function withNote(content, note) {
+    if (Array.isArray(content)) return content.concat([{ type: 'text', text: note }]);
+    return content + note;
+  }
+
+  /**
+   * 完整解题流程
+   * @param {{problem:string, grade:number, method:string, unit1:boolean, image?:string, nudge?:string, onPhase?:Function}} opts
+   * @returns {Promise<{script, verify, warnings, ms, calls, repaired, model}>}
+   */
+  async function solve(opts) {
+    const t0 = performance.now();
+    const { problem, grade, method, unit1, image, nudge, onPhase } = opts;
+    const phase = onPhase || function () {};
+    let calls = 0;
+    let repaired = false;
+
+    // 带图时必须用视觉模型；没有视觉模型就直接拒绝，别让它瞎猜
+    const cfg = L.getConfig();
+    const vision = image ? L.visionModelOf(cfg) : '';
+    if (image && !vision) {
+      const e = new Error('带图讲解需要视觉模型：请在设置里选一个能看图的模型（如 qwen-vl-max / Qwen2.5-VL / Kimi vision）');
+      e.code = 'NO_VISION';
+      throw e;
+    }
+    const model = vision || cfg.model;
+    const callOpts = { config: { model } };
+
+    const userPrompt = P.buildUserPrompt({ problem, grade, method, unit1, hasImage: !!image });
+    const userContent = image
+      ? [{ type: 'text', text: userPrompt }, { type: 'image_url', image_url: { url: image } }]
+      : userPrompt;
+
+    const firstMessages = () => {
+      const m = [
+        { role: 'system', content: P.systemPrompt() },
+        { role: 'user', content: userContent }
+      ];
+      if (nudge) m.push({ role: 'user', content: '上一版讲得不够清楚。请换一种更直观的讲法重讲一次：' + nudge });
+      return m;
+    };
+
+    phase(image ? 'reading' : 'thinking');
+    let text = await L.chat(firstMessages(), callOpts);
+    calls++;
+
+    phase('parsing');
+    let out;
+    try {
+      out = S.normalize(text);
+    } catch (e1) {
+      phase('repair');
+      text = await L.chat([
+        { role: 'system', content: P.systemPrompt() },
+        {
+          role: 'user',
+          content: withNote(userContent,
+            `\n\n注意：你上一次的输出无法解析（${e1.message}）。请严格只输出一个合法的 JSON 对象，不要包代码块，不要多余文字。`)
+        }
+      ], callOpts);
+      calls++;
+      out = S.normalize(text);
+    }
+
+    phase('checking');
+    let v = S.verify(out.script);
+
+    // 算错时请求模型修正一次
+    const needFix = v.bad > 0 || (v.answerCheck && v.answerCheck.ok === false);
+    if (needFix) {
+      try {
+        phase('fixing');
+        repaired = true;
+        const badSteps = out.script.steps.filter((st) => st.check === 'bad')
+          .map((st) => `第${st.n}步「${st.title}」算式 ${st.math}：${(v.results[st.n - 1] || {}).message || '算错了'}`);
+        const answerMsg = v.answerCheck && v.answerCheck.ok === false
+          ? `最终答案写的是 ${out.script.answer.value}，但讲解的算式里没有任何一步算出这个数，请对照检查。`
+          : '';
+        const fixMsg = `你刚生成的讲解里，有算式对不上：
+${badSteps.join('\n')}
+${answerMsg}
+请重新核对，输出**修正后的完整 JSON**（结构不变，只改错的地方），不要解释。`;
+        const fixedText = await L.chat([
+          { role: 'system', content: P.systemPrompt() },
+          { role: 'user', content: userContent },
+          { role: 'assistant', content: clip(JSON.stringify(out.script.raw || out.script), 12000) },
+          { role: 'user', content: fixMsg }
+        ], callOpts);
+        calls++;
+        const fixed = S.normalize(fixedText);
+        const v2 = S.verify(fixed.script);
+        if (v2.bad <= v.bad) { out = fixed; v = v2; }
+      } catch (e) {
+        // 修复失败就保留原稿，由界面标出可疑步骤
+      }
+    }
+
+    return {
+      script: out.script,
+      warnings: out.warnings,
+      verify: v,
+      ms: Math.round(performance.now() - t0),
+      calls,
+      repaired,
+      model
+    };
+  }
+
+  /** 追问：回答并指回图上 */
+  async function ask(script, question) {
+    const text = await L.chat([
+      { role: 'system', content: '你是一位耐心的小学数学老师，回答要短、要具体、要打比方。只输出 JSON。' },
+      { role: 'user', content: P.buildAskPrompt(script, question) }
+    ]);
+    let obj;
+    try {
+      obj = S.extractJson(text);
+    } catch (e) {
+      return { text: String(text).slice(0, 160), focus: [], step: 0 };
+    }
+    return {
+      text: String((obj && obj.text) || '').slice(0, 220),
+      focus: Array.isArray(obj && obj.focus) ? obj.focus.slice(0, 2) : [],
+      step: Number(obj && obj.step) || 0
+    };
+  }
+
+  MT.agent = { solve, ask };
+})();
+
+
+/* ==================== 60-diagrams.js ==================== */
+/* 60-diagrams.js —— 9 种 SVG 图解渲染器
+   每个渲染器返回 { svg, reg }：reg 记录 id → {el, text, special}，
+   播放器通过 ops 操作这些元素，实现「讲到哪、图变到哪」。 */
+(function () {
+  const MT = (window.MT = window.MT || {});
+  const NS = 'http://www.w3.org/2000/svg';
+  const W = 880, H = 520;
+
+  const C = {
+    blue: { main: '#2D9CDB', soft: '#E9F5FD', deep: '#1B6D9B' },
+    orange: { main: '#FF8A4C', soft: '#FFF0E9', deep: '#C2560F' },
+    green: { main: '#3CB179', soft: '#E7F6EE', deep: '#1F7A4D' },
+    purple: { main: '#8E6BD8', soft: '#F1ECFC', deep: '#5E44A6' },
+    amber: { main: '#EBA33A', soft: '#FDF3E2', deep: '#96630F' },
+    gray: { main: '#93A2B0', soft: '#F1F4F7', deep: '#5A6875' },
+    red: { main: '#E0533F', soft: '#FDEDE9', deep: '#A33A28' }
+  };
+  const color = (k) => C[k] || C.blue;
+
+  function s(tag, attrs, text) {
+    const n = document.createElementNS(NS, tag);
+    if (attrs) for (const k in attrs) {
+      if (attrs[k] == null || attrs[k] === '') continue;
+      n.setAttribute(k, attrs[k]);
+    }
+    if (text != null) n.textContent = text;
+    return n;
+  }
+
+  function text(x, y, str, cls, extra) {
+    const t = s('text', Object.assign({ x, y, class: cls || 'lbl', 'text-anchor': 'middle' }, extra || {}), str);
+    return t;
+  }
+
+  function bracket(x0, x1, y, dir, colorHex) {
+    const d = dir > 0
+      ? `M${x0} ${y - 12} V${y} H${x1} V${y - 12}`
+      : `M${x0} ${y + 12} V${y} H${x1} V${y + 12}`;
+    return s('path', { d, fill: 'none', stroke: colorHex || '#C7D2DC', 'stroke-width': 2, 'stroke-linecap': 'round' });
+  }
+
+  function pill(x, y, w, h, fill, stroke) {
+    return s('rect', { x, y, width: w, height: h, rx: h / 2, fill: fill || '#fff', stroke: stroke || '#E3DACD', 'stroke-width': 1.4 });
+  }
+
+  function reg(map, id, el, textEl, special) {
+    if (!id) return;
+    if (textEl) el._text = textEl;
+    if (special) el._special = special;
+    map[id] = el;
+  }
+
+  function title(svg, str) {
+    if (!str) return;
+    svg.appendChild(s('text', { x: W / 2, y: 38, class: 'title', 'text-anchor': 'middle' }, str));
+  }
+
+  /* ==================== 1. 线段图 ==================== */
+  function renderSegment(spec, reg) {
+    const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'dg' });
+    title(svg, spec.title);
+    const x0 = 92, totalW = 700, barY = 186, barH = 68;
+    const sum = spec.parts.reduce((a, p) => a + p.ratio, 0) || 1;
+    const gap = 5;
+    const usable = totalW - gap * (spec.parts.length - 1);
+
+    let cursor = x0;
+    const spans = [];
+    spec.parts.forEach((p, i) => {
+      const w = usable * (p.ratio / sum);
+      spans.push({ x: cursor, w, p });
+      cursor += w + gap;
+    });
+
+    // 总量大括号
+    if (spec.total) {
+      const g = s('g', { class: 'el', 'data-id': spec.total.id });
+      const center = x0 + totalW / 2;
+      g.appendChild(s('text', { x: center - 34, y: 122, class: 'note', 'text-anchor': 'end' }, spec.total.label || ''));
+      const tv = s('text', { x: center + 34, y: 122, class: 'val', 'text-anchor': 'start' }, '');
+      g.appendChild(tv);
+      g.appendChild(bracket(x0, x0 + totalW, 138, 1, '#B9C7D4'));
+      svg.appendChild(g);
+      reg[spec.total.id] = g;
+      g._text = tv;
+      tv.textContent = spec.total.value || '';
+      // 让 set 也能同时改 label
+      g._label = g.firstChild;
+    }
+
+    spans.forEach(({ x, w, p }) => {
+      const c = color(p.color);
+      const g = s('g', { class: 'el', 'data-id': p.id });
+      g.appendChild(s('rect', {
+        x, y: barY, width: w, height: barH, rx: 10,
+        fill: c.soft, stroke: c.main, 'stroke-width': 1.8
+      }));
+      if (p.label) {
+        g.appendChild(text(x + w / 2, barY - 16, p.label, 'lbl', { fill: c.deep }));
+      }
+      const valText = text(x + w / 2, barY + barH / 2 + 6, p.value || '', 'val', { fill: c.deep, 'font-size': 16 });
+      g.appendChild(valText);
+      svg.appendChild(g);
+      reg[p.id] = g;
+      g._text = valText;
+    });
+
+    // 单位 1
+    if (spec.unitOne) {
+      const sp = spans.find((x) => x.p.id === spec.unitOne.id);
+      if (sp) {
+        const g = s('g', { class: 'el', 'data-id': spec.unitOne.id + '__u1' });
+        g.appendChild(bracket(sp.x + 2, sp.x + sp.w - 2, barY + barH + 16, -1, C.orange.main));
+        g.appendChild(text(sp.x + sp.w / 2, barY + barH + 44, spec.unitOne.label || '1', 'lbl', { fill: C.orange.deep, 'font-size': 15 }));
+        svg.appendChild(g);
+        reg[spec.unitOne.id + '__u1'] = g;
+      }
+    }
+
+    // 问题
+    if (spec.question && spec.question.label) {
+      const qw = Math.max(150, spec.question.label.length * 15 + 40);
+      const g = s('g', { class: 'el', 'data-id': spec.question.id });
+      g.appendChild(pill(W / 2 - qw / 2, 352, qw, 42, '#FFF8F2', '#FFC9AC'));
+      g.appendChild(text(W / 2, 379, spec.question.label, 'lbl', { fill: '#B4551F' }));
+      svg.appendChild(g);
+      reg[spec.question.id] = g;
+    }
+
+    return svg;
+  }
+
+  /* ==================== 2. 份数方块图 ==================== */
+  function renderBars(spec, reg) {
+    const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'dg' });
+    title(svg, spec.title);
+    const n = spec.rows.length;
+    const rowH = Math.min(96, 380 / Math.max(1, n));
+    const startY = 150;
+    const sq = Math.min(52, Math.max(34, 520 / Math.max(1, Math.max(...spec.rows.map((r) => r.ratio)))));
+
+    spec.rows.forEach((r, i) => {
+      const c = color(r.color);
+      const y = startY + i * rowH;
+      const g = s('g', { class: 'el', 'data-id': r.id });
+
+      g.appendChild(text(140, y + sq / 2 + 6, r.label || '', 'lbl', { 'text-anchor': 'end', fill: c.deep }));
+
+      for (let k = 0; k < r.ratio; k++) {
+        g.appendChild(s('rect', {
+          x: 160 + k * (sq + 9), y, width: sq, height: sq, rx: 9,
+          fill: k === 0 ? c.main : c.soft, stroke: c.main, 'stroke-width': 1.6, opacity: k === 0 ? 0.92 : 1
+        }));
+      }
+      const valX = 160 + r.ratio * (sq + 9) + 18;
+      const vt = s('text', { x: valX, y: y + sq / 2 + 7, class: 'val', fill: c.deep }, r.value || '');
+      g.appendChild(vt);
+      svg.appendChild(g);
+      reg[r.id] = g;
+      g._text = vt;
+    });
+
+    svg.appendChild(s('text', { x: 160, y: 112, class: 'sm' }, '每 1 个方块 = 1 ' + (spec.unit || '份')));
+    if (!spec.title) svg.appendChild(s('text', { x: W / 2, y: 60, class: 'title', 'text-anchor': 'middle' }, '份数图'));
+    return svg;
+  }
+
+  /* ==================== 3. 天平图 ==================== */
+  function renderBalance(spec, reg) {
+    const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'dg' });
+    title(svg, spec.title || '天平');
+    const cx = W / 2, beamY = 250;
+
+    const beamGroup = s('g', { class: 'el', 'data-id': 'beam', style: 'transform-origin:0 0' });
+    reg.beam = beamGroup;
+    let tilt = 0;
+    beamGroup._special = (v) => {
+      tilt = v === 'left' ? -4 : v === 'right' ? 4 : 0;
+      beamGroup.setAttribute('transform', `rotate(${tilt} ${cx} ${beamY})`);
+    };
+
+    beamGroup.appendChild(s('rect', { x: cx - 250, y: beamY - 7, width: 500, height: 14, rx: 7, fill: '#F0B23C' }));
+    beamGroup.appendChild(s('circle', { cx, cy: beamY, r: 13, fill: '#D98F1C' }));
+    beamGroup.appendChild(s('path', { d: `M${cx} ${beamY + 10} L${cx} ${beamY + 66}`, stroke: '#B8801C', 'stroke-width': 10, 'stroke-linecap': 'round' }));
+    beamGroup.appendChild(s('path', { d: `M${cx - 58} 400 L${cx + 58} 400 L${cx} ${beamY + 66} Z`, fill: '#F6C765', stroke: '#D98F1C', 'stroke-width': 2, 'stroke-linejoin': 'round' }));
+    beamGroup.appendChild(s('rect', { x: cx - 84, y: 398, width: 168, height: 14, rx: 7, fill: '#E8B24A' }));
+
+    [
+      { side: 'left', x: cx - 190, data: spec.left },
+      { side: 'right', x: cx + 190, data: spec.right }
+    ].forEach(({ side, x, data }) => {
+      const g = s('g', { class: 'el' });
+      g.appendChild(s('path', { d: `M${x} ${beamY + 4} L${x - 62} ${beamY + 96}`, stroke: '#C9B08A', 'stroke-width': 2 }));
+      g.appendChild(s('path', { d: `M${x} ${beamY + 4} L${x + 62} ${beamY + 96}`, stroke: '#C9B08A', 'stroke-width': 2 }));
+      g.appendChild(s('rect', { x: x - 96, y: beamY + 92, width: 192, height: 20, rx: 10, fill: '#F7EAD2', stroke: '#D9BE8F', 'stroke-width': 1.6 }));
+      g.appendChild(s('rect', { x: x - 96, y: beamY + 108, width: 192, height: 8, rx: 4, fill: '#E9D3AC' }));
+
+      let yy = beamY + 66;
+      const items = (data.items || []);
+      items.forEach((it, i) => {
+        const cw = it.text.length * 15 + 34;
+        const cxp = x - cw / 2;
+        const ig = s('g', { class: 'el', 'data-id': it.id });
+        ig.appendChild(s('rect', { x: cxp, y: yy - 30, width: cw, height: 38, rx: 11, fill: i % 2 ? '#E9F5FD' : '#FFF0E9', stroke: i % 2 ? '#9FD0EC' : '#FFB894', 'stroke-width': 1.6 }));
+        const tx = s('text', { x, y: yy - 5, class: 'lbl', 'text-anchor': 'middle', fill: '#2B4A63' }, it.text);
+        ig.appendChild(tx);
+        ig._text = tx;
+        g.appendChild(ig);
+        reg[it.id] = ig;
+        yy -= 46;
+      });
+
+      const lbl = s('text', { x, y: beamY + 152, class: 'note', 'text-anchor': 'middle' }, data.label || '');
+      g.appendChild(lbl);
+      g._text = lbl;
+      beamGroup.appendChild(g);
+      reg[side] = g;
+    });
+
+    svg.appendChild(beamGroup);
+
+    if (spec.hint) {
+      svg.appendChild(pill(cx - 150, 452, 300, 36, '#F4FBF7', '#BDE3CE'));
+      svg.appendChild(text(cx, 476, spec.hint, 'note', { fill: '#2C7A54' }));
+    }
+    return svg;
+  }
+
+  /* ==================== 4. 平面图形 ==================== */
+  function renderArea(spec, reg) {
+    const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'dg' });
+    title(svg, spec.title);
+    const d = spec.dims;
+    const boxX = 110, boxY = 120, boxW = 660, boxH = 280;
+    const shape = spec.shape;
+
+    let g = s('g', { class: 'el', 'data-id': 'rect' });
+    let bw = 0, bh = 0, ox = 0, oy = 0;
+
+    if (shape === 'circle') {
+      const r = Math.min(boxW, boxH) / 2 - 20;
+      const cx = W / 2, cy = boxY + boxH / 2;
+      g.appendChild(s('circle', { cx, cy, r, fill: C.blue.soft, stroke: C.blue.main, 'stroke-width': 2.4 }));
+      g.appendChild(s('path', { d: `M${cx} ${cy} L${cx + r} ${cy}`, stroke: C.blue.deep, 'stroke-width': 2, 'stroke-dasharray': '6 5' }));
+      g.appendChild(s('circle', { cx, cy, r: 4, fill: C.blue.deep }));
+      g.appendChild(text(cx + r / 2, cy - 12, 'r = ' + d.r, 'lbl', { fill: C.blue.deep }));
+      g.appendChild(text(cx, cy + r + 34, (spec.labels && spec.labels.bottom) || '', 'note'));
+    } else {
+      const baseW = shape === 'triangle' ? (d.b || d.w || 8) : (shape === 'trapezoid' ? (d.b || 10) : (d.w || 8));
+      const k = Math.min(boxW / (baseW || 8), boxH / (d.h || 5)) * 0.86;
+      bw = (baseW || 8) * k; bh = (d.h || 5) * k;
+      ox = W / 2 - bw / 2; oy = boxY + (boxH - bh) / 2;
+
+      if (shape === 'rect') {
+        g.appendChild(s('rect', { x: ox, y: oy, width: bw, height: bh, rx: 4, fill: C.blue.soft, stroke: C.blue.main, 'stroke-width': 2.4 }));
+        // 单位方格
+        if (d.w <= 14 && d.h <= 14) {
+          for (let i = 1; i < d.w; i++) g.appendChild(s('line', { x1: ox + (bw / d.w) * i, y1: oy, x2: ox + (bw / d.w) * i, y2: oy + bh, stroke: '#B9DEF3', 'stroke-width': 1 }));
+          for (let j = 1; j < d.h; j++) g.appendChild(s('line', { x1: ox, y1: oy + (bh / d.h) * j, x2: ox + bw, y2: oy + (bh / d.h) * j, stroke: '#B9DEF3', 'stroke-width': 1 }));
+        }
+      } else if (shape === 'triangle') {
+        g.appendChild(s('path', { d: `M${ox} ${oy + bh} L${ox + bw / 2} ${oy} L${ox + bw} ${oy + bh} Z`, fill: C.orange.soft, stroke: C.orange.main, 'stroke-width': 2.4, 'stroke-linejoin': 'round' }));
+        g.appendChild(s('path', { d: `M${ox + bw / 2} ${oy} L${ox + bw / 2} ${oy + bh}`, stroke: C.orange.deep, 'stroke-width': 1.6, 'stroke-dasharray': '5 5' }));
+      } else if (shape === 'parallelogram') {
+        const sk = Math.min(60, bw * 0.2);
+        g.appendChild(s('path', { d: `M${ox + sk} ${oy} L${ox + bw} ${oy} L${ox + bw - sk} ${oy + bh} L${ox} ${oy + bh} Z`, fill: C.green.soft, stroke: C.green.main, 'stroke-width': 2.4, 'stroke-linejoin': 'round' }));
+        g.appendChild(s('path', { d: `M${ox + sk} ${oy} L${ox + sk} ${oy + bh}`, stroke: C.green.deep, 'stroke-width': 1.6, 'stroke-dasharray': '5 5' }));
+      } else if (shape === 'trapezoid') {
+        const top = bw * ((d.b2 || 4) / (d.b || 10));
+        g.appendChild(s('path', { d: `M${ox + (bw - top) / 2} ${oy} L${ox + (bw + top) / 2} ${oy} L${ox + bw} ${oy + bh} L${ox} ${oy + bh} Z`, fill: C.purple.soft, stroke: C.purple.main, 'stroke-width': 2.4, 'stroke-linejoin': 'round' }));
+      } else {
+        g.appendChild(s('rect', { x: ox, y: oy, width: bw, height: bh, rx: 4, fill: C.amber.soft, stroke: C.amber.main, 'stroke-width': 2.4 }));
+        g.appendChild(s('path', { d: `M${ox} ${oy} L${ox + bw} ${oy + bh}`, stroke: C.amber.deep, 'stroke-width': 2, 'stroke-dasharray': '6 5' }));
+      }
+
+      // 边长标注
+      const L = spec.labels || {};
+      g.appendChild(text(ox + bw / 2, oy + bh + 30, L.bottom || ((d.b || d.w) + ' ' + spec.unit), 'note'));
+      g.appendChild(text(ox - 16, oy + bh / 2 + 5, L.left || ((d.w || d.h) + ' ' + spec.unit), 'note', { 'text-anchor': 'end' }));
+      if (shape === 'trapezoid') g.appendChild(text(ox + bw / 2, oy - 14, L.top || ((d.b2 || 4) + ' ' + spec.unit), 'note'));
+      else if (shape !== 'rect') g.appendChild(text(ox + bw - 6, oy - 12, L.top || ((d.h || 5) + ' ' + spec.unit), 'note', { 'text-anchor': 'start' }));
+      else g.appendChild(text(ox + bw + 16, oy + bh / 2 + 5, L.right || ((d.h || 5) + ' ' + spec.unit), 'note', { 'text-anchor': 'start' }));
+    }
+
+    svg.appendChild(g);
+    reg.rect = g;
+    reg.shape = g;
+
+    if (spec.formula) {
+      const fw = Math.max(200, spec.formula.length * 13 + 40);
+      svg.appendChild(pill(W / 2 - fw / 2, 442, fw, 44, '#EAF6FD', '#BFE0F2'));
+      svg.appendChild(text(W / 2, 470, spec.formula, 'val', { fill: '#1B6D9B', 'font-size': 16 }));
+    }
+    return svg;
+  }
+
+  /* ==================== 5. 立体图形 ==================== */
+  function renderSolid(spec, reg) {
+    const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'dg' });
+    title(svg, spec.title);
+    const d = spec.dims;
+    const g = s('g', { class: 'el', 'data-id': 'solid' });
+    reg.solid = g;
+
+    if (spec.shape === 'cylinder' || spec.shape === 'cone') {
+      const r = 110, h = 210;
+      const cx = W / 2, top = 150, bottom = top + h;
+      if (spec.shape === 'cylinder') {
+        g.appendChild(s('path', { d: `M${cx - r} ${top} L${cx - r} ${bottom} A${r} 34 0 0 0 ${cx + r} ${bottom} L${cx + r} ${top}`, fill: '#E9F5FD', stroke: '#2D9CDB', 'stroke-width': 2.4 }));
+        g.appendChild(s('ellipse', { cx, cy: top, rx: r, ry: 34, fill: '#D6EEFB', stroke: '#2D9CDB', 'stroke-width': 2.4 }));
+        g.appendChild(s('path', { d: `M${cx} ${top} L${cx + r} ${top}`, stroke: '#1B6D9B', 'stroke-width': 2, 'stroke-dasharray': '6 5' }));
+        g.appendChild(text(cx + r / 2, top - 10, 'r = ' + d.r, 'note', { fill: '#1B6D9B' }));
+        g.appendChild(text(cx + r + 22, top + h / 2, 'h = ' + (d.h || 4), 'note', { 'text-anchor': 'start' }));
+        g.appendChild(s('path', { d: `M${cx + r + 8} ${top} L${cx + r + 8} ${bottom}`, stroke: '#9FB3C2', 'stroke-width': 1.6, 'stroke-dasharray': '4 4' }));
+      } else {
+        g.appendChild(s('path', { d: `M${cx} ${top} L${cx - r} ${bottom} A${r} 34 0 0 0 ${cx + r} ${bottom} Z`, fill: '#FFF0E9', stroke: '#FF8A4C', 'stroke-width': 2.4 }));
+        g.appendChild(s('path', { d: `M${cx} ${top} L${cx + r} ${bottom}`, stroke: '#E07B3F', 'stroke-width': 1.8, 'stroke-dasharray': '6 5' }));
+        g.appendChild(text(cx + 20, top + h / 2, 'h = ' + (d.h || 4), 'note', { 'text-anchor': 'start', fill: '#C2560F' }));
+      }
+    } else {
+      const w = 230, h = 150, dx = 110, dy = -80;
+      const x = W / 2 - w / 2 - 30, y = 250;
+      g.appendChild(s('path', { d: `M${x} ${y} L${x + dx} ${y + dy} L${x + w + dx} ${y + dy} L${x + w} ${y} Z`, fill: '#D6EEFB', stroke: '#2D9CDB', 'stroke-width': 2.2, 'stroke-linejoin': 'round' }));
+      g.appendChild(s('path', { d: `M${x + w} ${y} L${x + w + dx} ${y + dy} L${x + w + dx} ${y + dy + h} L${x + w} ${y + h} Z`, fill: '#C2E4F6', stroke: '#2D9CDB', 'stroke-width': 2.2, 'stroke-linejoin': 'round' }));
+      g.appendChild(s('rect', { x, y, width: w, height: h, fill: '#E9F5FD', stroke: '#2D9CDB', 'stroke-width': 2.4 }));
+      g.appendChild(s('path', { d: `M${x} ${y} L${x + dx} ${y + dy}`, stroke: '#2D9CDB', 'stroke-width': 2 }));
+      g.appendChild(s('path', { d: `M${x + dx} ${y + dy} L${x + dx} ${y + dy + h}`, stroke: '#9FB3C2', 'stroke-width': 1.4, 'stroke-dasharray': '5 5' }));
+      g.appendChild(s('path', { d: `M${x + dx} ${y + dy + h} L${x + w + dx} ${y + dy + h}`, stroke: '#9FB3C2', 'stroke-width': 1.4, 'stroke-dasharray': '5 5' }));
+
+      g.appendChild(text(x + w / 2, y + h + 30, '长 ' + (d.l || 5) + ' ' + spec.unit, 'note'));
+      g.appendChild(text(x - 14, y + h / 2 + 4, '高 ' + (d.h || 4), 'note', { 'text-anchor': 'end' }));
+      g.appendChild(text(x + w + dx / 2, y + dy - 14, '宽 ' + (d.w || 3), 'note', { 'text-anchor': 'middle' }));
+    }
+
+    svg.appendChild(g);
+    if (spec.formula) {
+      const fw = Math.max(220, spec.formula.length * 13 + 40);
+      svg.appendChild(pill(W / 2 - fw / 2, 442, fw, 44, '#EAF6FD', '#BFE0F2'));
+      svg.appendChild(text(W / 2, 470, spec.formula, 'val', { fill: '#1B6D9B', 'font-size': 16 }));
+    }
+    return svg;
+  }
+
+  /* ==================== 6. 行程图 ==================== */
+  function renderRoute(spec, reg) {
+    const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'dg' });
+    title(svg, spec.title || '行程图');
+    const x0 = 90, x1 = 790, y = 300, len = spec.length || 100;
+    const px = (v) => x0 + (x1 - x0) * (v / len);
+
+    svg.appendChild(s('line', { x1: x0, y1: y, x2: x1, y2: y, stroke: '#D6CEC1', 'stroke-width': 8, 'stroke-linecap': 'round' }));
+    svg.appendChild(s('line', { x1: x0, y1: y, x2: x1, y2: y, stroke: '#F6E7CF', 'stroke-width': 3, 'stroke-dasharray': '18 14', 'stroke-linecap': 'round' }));
+
+    (spec.marks || []).forEach((m) => {
+      const g = s('g', { class: 'el', 'data-id': m.id });
+      const x = px(m.at);
+      g.appendChild(s('line', { x1: x, y1: y - 20, x2: x, y2: y + 20, stroke: '#B9C7D4', 'stroke-width': 2, 'stroke-dasharray': '4 4' }));
+      g.appendChild(s('circle', { cx: x, cy: y, r: 7, fill: '#fff', stroke: '#93A2B0', 'stroke-width': 3 }));
+      g.appendChild(text(x, y + 46, m.label, 'note'));
+      svg.appendChild(g);
+      reg[m.id] = g;
+    });
+
+    (spec.travelers || []).forEach((t) => {
+      const c = color(t.color);
+      const g = s('g', { class: 'el', 'data-id': t.id });
+      const x = px(t.pos);
+      g.appendChild(s('rect', { x: x - 30, y: y - 96, width: 60, height: 44, rx: 12, fill: c.main, opacity: 0.95 }));
+      g.appendChild(text(x, y - 67, t.dir > 0 ? '▶' : '◀', 'lbl', { fill: '#fff', 'font-size': 18 }));
+      g.appendChild(s('line', { x1: x + t.dir * 16, y1: y - 20, x2: x + t.dir * 76, y2: y - 20, stroke: c.main, 'stroke-width': 3, 'stroke-linecap': 'round' }));
+      g.appendChild(s('path', {
+        d: t.dir > 0 ? `M${x + 76} ${y - 20} l-11 -6 v12 z` : `M${x - 76} ${y - 20} l11 -6 v12 z`,
+        fill: c.main
+      }));
+      const tx = s('text', { x, y: y - 112, class: 'lbl', 'text-anchor': 'middle', fill: c.deep }, t.name);
+      g.appendChild(tx);
+      g._text = tx;
+      g.appendChild(text(x, y + 76, t.speed, 'sm', { fill: c.deep }));
+      svg.appendChild(g);
+      reg[t.id] = g;
+    });
+
+    svg.appendChild(bracket(x0, x1, 120, 1, '#C7D2DC'));
+    svg.appendChild(text(W / 2, 106, '全程 ' + len + ' ' + spec.unit, 'note'));
+    return svg;
+  }
+
+  /* ==================== 7. 表格 ==================== */
+  function renderTable(spec, reg) {
+    const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'dg' });
+    title(svg, spec.title);
+    const cols = spec.cols.length, rows = spec.rows.length;
+    const tw = Math.min(720, cols * 160), th = Math.min(52, 340 / Math.max(1, rows + 1));
+    const x0 = (W - tw) / 2, y0 = 120, cw = tw / cols;
+
+    svg.appendChild(s('rect', { x: x0, y: y0, width: tw, height: th, rx: 10, fill: '#2B4A63' }));
+    spec.cols.forEach((c, i) => {
+      svg.appendChild(text(x0 + cw * (i + 0.5), y0 + th / 2 + 6, c.label, 'lbl', { fill: '#fff', 'font-size': 14 }));
+    });
+
+    spec.rows.forEach((r, ri) => {
+      const y = y0 + th + ri * th;
+      const g = s('g', { class: 'el', 'data-id': r.id });
+      g.appendChild(s('rect', { x: x0, y, width: tw, height: th, fill: ri % 2 ? '#FBF8F3' : '#fff', stroke: '#EDE6DA', 'stroke-width': 1 }));
+      r.cells.forEach((cell, ci) => {
+        const t = s('text', { x: x0 + cw * (ci + 0.5), y: y + th / 2 + 6, class: ci === cols - 1 ? 'val' : 'lbl', 'text-anchor': 'middle', fill: ci === cols - 1 ? '#1B6D9B' : '#3B4A58' }, cell);
+        g.appendChild(t);
+      });
+      svg.appendChild(g);
+      reg[r.id] = g;
+    });
+    return svg;
+  }
+
+  /* ==================== 8. 数量轴 ==================== */
+  function renderNumberline(spec, reg) {
+    const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'dg' });
+    title(svg, spec.title || '数量轴');
+    const x0 = 110, x1 = 770, y = 340;
+    const min = spec.min, max = spec.max;
+    const px = (v) => x0 + (x1 - x0) * ((v - min) / (max - min || 1));
+    const clampX = (v) => Math.max(x0, Math.min(x1, v));
+
+    // 区间（画在轴上方：宽的在上面，窄的在下面，避免引线打架）
+    const spans = (spec.spans || [])
+      .map((sp, i) => ({ sp, i, w: Math.abs((sp.to || 0) - (sp.from || 0)) }))
+      .sort((a, b) => b.w - a.w);
+
+    spans.forEach(({ sp, i }, rank) => {
+      const c = color(sp.color);
+      const a = clampX(px(Math.min(sp.from, sp.to)));
+      const b = clampX(px(Math.max(sp.from, sp.to)));
+      const yy = 150 + rank * 50;
+      const g = s('g', { class: 'el', 'data-id': sp.id });
+      g.appendChild(s('line', { x1: a, y1: yy + 6, x2: a, y2: y - 10, stroke: c.main, 'stroke-width': 1.4, 'stroke-dasharray': '4 5', opacity: 0.4 }));
+      g.appendChild(s('line', { x1: b, y1: yy + 6, x2: b, y2: y - 10, stroke: c.main, 'stroke-width': 1.4, 'stroke-dasharray': '4 5', opacity: 0.4 }));
+      g.appendChild(bracket(a, b, yy, 1, c.main));
+      const label = sp.label || '';
+      const tw = label.length * 13 + 16;
+      const mid = (a + b) / 2;
+      const lx = Math.max(4, Math.min(W - tw - 4, mid - tw / 2));
+      g.appendChild(s('rect', { x: lx, y: yy - 30, width: tw, height: 24, rx: 12, fill: '#fff', stroke: c.main, 'stroke-width': 1.2, opacity: 0.96 }));
+      const spanT = text(lx + tw / 2, yy - 13, label, 'note', { fill: c.deep, 'font-size': 12.5 });
+      g.appendChild(spanT);
+      g._text = spanT;
+      svg.appendChild(g);
+      reg[sp.id] = g;
+    });
+
+    // 轴
+    svg.appendChild(s('line', { x1: x0 - 26, y1: y, x2: x1 + 34, y2: y, stroke: '#8C9AA8', 'stroke-width': 2.6 }));
+    svg.appendChild(s('path', { d: `M${x1 + 34} ${y} l-13 -6 v12 z`, fill: '#8C9AA8' }));
+
+    (spec.ticks.length ? spec.ticks : [{ value: min, label: String(min) }, { value: max, label: String(max) }]).forEach((t) => {
+      const x = px(t.value);
+      const tg = s('g', { class: 'el', 'data-id': t.id });
+      tg.appendChild(s('line', { x1: x, y1: y - 9, x2: x, y2: y + 9, stroke: '#8C9AA8', 'stroke-width': 2 }));
+      tg.appendChild(s('circle', { cx: x, cy: y, r: 3.4, fill: '#8C9AA8' }));
+      if (t.label) {
+        const tt = text(x, y + 32, t.label, 'note');
+        tg.appendChild(tt);
+        tg._text = tt;
+      }
+      svg.appendChild(tg);
+      if (t.id) reg[t.id] = tg;
+    });
+
+    // 标记（图钉）
+    (spec.marks || []).forEach((m) => {
+      const c = color(m.color);
+      const x = px(m.value);
+      const g = s('g', { class: 'el', 'data-id': m.id });
+      g.appendChild(s('path', { d: `M${x} ${y - 12} l-8 -14 h16 z`, fill: c.main }));
+      g.appendChild(s('line', { x1: x, y1: y - 26, x2: x, y2: y - 56, stroke: c.main, 'stroke-width': 2 }));
+      g.appendChild(text(x, y - 66, m.label, 'lbl', { fill: c.deep }));
+      svg.appendChild(g);
+      reg[m.id] = g;
+    });
+
+    // 参考线（成本线之类）
+    (spec.refs || []).forEach((r) => {
+      const c = color(r.color);
+      const x = px(r.at);
+      const g = s('g', { class: 'el', 'data-id': r.id });
+      g.appendChild(s('line', { x1: x, y1: y - 5, x2: x, y2: y + 56, stroke: c.main, 'stroke-width': 2.6, 'stroke-dasharray': '7 6' }));
+      g.appendChild(s('circle', { cx: x, cy: y, r: 6, fill: '#fff', stroke: c.main, 'stroke-width': 3 }));
+      const label = r.label || '';
+      const tw = Math.max(78, label.length * 13 + 22);
+      const lx = Math.max(6, Math.min(W - tw - 6, x - tw / 2));
+      g.appendChild(s('rect', { x: lx, y: y + 62, width: tw, height: 30, rx: 15, fill: c.soft, stroke: c.main, 'stroke-width': 1.4 }));
+      const refT = text(lx + tw / 2, y + 82, label, 'lbl', { fill: c.deep, 'font-size': 12.5 });
+      g.appendChild(refT);
+      g._text = refT;
+      svg.appendChild(g);
+      reg[r.id] = g;
+    });
+
+    return svg;
+  }
+
+  /* ==================== 9. 浓度条 ==================== */
+  function renderPercentBar(spec, reg) {
+    const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'dg' });
+    title(svg, spec.title);
+    const x0 = 196, barW = 600, h = 58;
+    const startY = spec.rows.length > 1 ? 148 : 210;
+    const rowH = 132;
+
+    spec.rows.forEach((r, i) => {
+      const y = startY + i * rowH;
+      const g = s('g', { class: 'el', 'data-id': r.id });
+
+      g.appendChild(s('text', { x: x0 - 22, y: y + h / 2 - 2, class: 'lbl', 'text-anchor': 'end', fill: '#3B4A58' }, r.label || ''));
+      const totalT = s('text', { x: x0 - 22, y: y + h / 2 + 22, class: 'val', 'text-anchor': 'end', fill: '#8A96A2', 'font-size': 13 }, r.total || '');
+      g.appendChild(totalT);
+      g._text = totalT;
+
+      const sum = r.segments.reduce((a, sg) => a + sg.pct, 0) || 100;
+      let cursor = x0;
+      r.segments.forEach((sg) => {
+        const w = Math.max(6, barW * (sg.pct / sum));
+        const c = color(sg.color);
+        const sgg = s('g', { class: 'el', 'data-id': sg.id });
+        sgg.appendChild(s('rect', { x: cursor, y, width: Math.max(4, w - 4), height: h, rx: 10, fill: c.soft, stroke: c.main, 'stroke-width': 1.8 }));
+        sgg.appendChild(text(cursor + w / 2, y + 20, sg.pct + '%', 'sm', { fill: c.deep }));
+        const labelT = s('text', { x: cursor + w / 2, y: y + h / 2 + 16, class: 'lbl', 'text-anchor': 'middle', fill: c.deep, 'font-size': 13 }, sg.label);
+        sgg.appendChild(labelT);
+        sgg._text = labelT;
+        g.appendChild(sgg);
+        reg[sg.id] = sgg;
+        cursor += w;
+      });
+
+      svg.appendChild(g);
+      reg[r.id] = g;
+    });
+
+    if (spec.note) {
+      svg.appendChild(pill(W / 2 - 200, 452, 400, 38, '#FFF8F2', '#FFC9AC'));
+      svg.appendChild(text(W / 2, 477, spec.note, 'note', { fill: '#B4551F' }));
+    }
+    return svg;
+  }
+
+  /* ==================== 10. 十字交叉 ==================== */
+  function renderCross(spec, reg) {
+    const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'dg' });
+    title(svg, spec.title || '十字交叉');
+    const lx = 330, rx = 560, cx = 445;
+    const yTop = 190, yBot = 350, yMid = 270;
+
+    // 交叉的两条斜线
+    svg.appendChild(s('line', { x1: lx, y1: yTop, x2: rx, y2: yBot, stroke: '#C7D2DC', 'stroke-width': 2.4 }));
+    svg.appendChild(s('line', { x1: lx, y1: yBot, x2: rx, y2: yTop, stroke: '#C7D2DC', 'stroke-width': 2.4 }));
+
+    spec.rows.forEach((r, i) => {
+      const c = color(r.color);
+      const y = i === 0 ? yTop : yBot;
+      const g = s('g', { class: 'el', 'data-id': r.id });
+
+      g.appendChild(s('circle', { cx: lx - 8, cy: y, r: 8, fill: c.main }));
+      g.appendChild(s('text', { x: lx - 28, y: y - 6, class: 'lbl', 'text-anchor': 'end', fill: c.deep }, r.label || ''));
+      g.appendChild(s('text', { x: lx - 28, y: y + 22, class: 'val', 'text-anchor': 'end', 'font-size': 17 }, r.value || ''));
+
+      const shareT = s('text', { x: rx + 20, y: y + 8, class: 'val', 'text-anchor': 'start', fill: c.deep, 'font-size': 17 }, r.share || '');
+      g.appendChild(shareT);
+      g._text = shareT;
+      svg.appendChild(g);
+      reg[r.id] = g;
+    });
+
+    // 中间结果
+    const mid = spec.mid;
+    const mg = s('g', { class: 'el', 'data-id': mid.id });
+    mg.appendChild(s('rect', { x: cx - 56, y: yMid - 26, width: 112, height: 52, rx: 26, fill: '#fff', stroke: '#FFB894', 'stroke-width': 2.6 }));
+    const mv = s('text', { x: cx, y: yMid + 7, class: 'val', 'text-anchor': 'middle', 'font-size': 19, fill: '#B4551F' }, mid.value || '');
+    mg.appendChild(mv);
+    mg._text = mv;
+    mg.appendChild(text(cx, yMid + 52, mid.label || '', 'sm'));
+    svg.appendChild(mg);
+    reg[mid.id] = mg;
+
+    if (spec.ratio) {
+      const tw = Math.max(220, spec.ratio.length * 16 + 50);
+      svg.appendChild(pill(W / 2 - tw / 2, 410, tw, 44, '#EAF6FD', '#BFE0F2'));
+      svg.appendChild(text(W / 2, 439, spec.ratio, 'val', { fill: '#1B6D9B', 'font-size': 17 }));
+    }
+    if (spec.note) {
+      svg.appendChild(text(W / 2, 486, spec.note, 'note'));
+    }
+    return svg;
+  }
+
+  /* ==================== 9. 信息卡（兜底） ==================== */
+  function renderCards(spec, reg) {
+    const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'dg' });
+    title(svg, spec.title);
+    const n = spec.cards.length;
+    const cw = n > 1 ? 380 : 620, ch = 150, gap = 26;
+    const totalW = n * cw + (n - 1) * gap;
+    const x0 = (W - totalW) / 2, y0 = 130;
+
+    spec.cards.forEach((c, i) => {
+      const col = color(c.color);
+      const x = x0 + i * (cw + gap);
+      const g = s('g', { class: 'el', 'data-id': c.id });
+      g.appendChild(s('rect', { x, y: y0, width: cw, height: ch, rx: 16, fill: '#fff', stroke: '#E8E1D6', 'stroke-width': 1.6 }));
+      g.appendChild(s('rect', { x, y: y0, width: 6, height: ch, rx: 3, fill: col.main }));
+      g.appendChild(text(x + 26, y0 + 40, c.title || '', 'lbl', { 'text-anchor': 'start', fill: col.deep, 'font-size': 15 }));
+      c.lines.slice(0, 4).forEach((line, li) => {
+        g.appendChild(text(x + 26, y0 + 74 + li * 24, line, 'note', { 'text-anchor': 'start' }));
+      });
+      svg.appendChild(g);
+      reg[c.id] = g;
+    });
+
+    if (n > 1) {
+      const ax = x0 + cw + gap / 2;
+      svg.appendChild(s('path', { d: `M${ax - 12} ${y0 + ch / 2} h20`, stroke: '#C7D2DC', 'stroke-width': 2.4 }));
+      svg.appendChild(s('path', { d: `M${ax + 8} ${y0 + ch / 2} l-8 -6 v12 z`, fill: '#C7D2DC' }));
+    }
+    return svg;
+  }
+
+  const RENDERERS = {
+    segment: renderSegment,
+    bars: renderBars,
+    balance: renderBalance,
+    area: renderArea,
+    solid: renderSolid,
+    route: renderRoute,
+    table: renderTable,
+    numberline: renderNumberline,
+    percentbar: renderPercentBar,
+    cross: renderCross,
+    cards: renderCards
+  };
+
+  function render(spec) {
+    const reg = {};
+    const fn = RENDERERS[spec.type] || renderCards;
+    let svg;
+    try {
+      svg = fn(spec.type === 'cards' && !spec.cards ? Object.assign({}, spec, { cards: [{ id: 'c1', title: '题目', lines: [''] }] }) : spec, reg);
+    } catch (e) {
+      console.error('图解渲染失败', e);
+      svg = renderCards({ type: 'cards', cards: [{ id: 'c1', title: '图解生成失败', lines: [String(e.message).slice(0, 40)], color: 'red' }] }, reg);
+    }
+    svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+    return { svg, reg };
+  }
+
+  MT.diagrams = { render, COLORS: C, W, H };
+})();
+
+
+/* ==================== 70-player.js ==================== */
+/* 70-player.js —— 讲解播放器：把 ops 变成图上的一次次变化 */
+(function () {
+  const MT = (window.MT = window.MT || {});
+  const NS = 'http://www.w3.org/2000/svg';
+
+  const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function svgNode(tag, attrs, text) {
+    const n = document.createElementNS(NS, tag);
+    if (attrs) for (const k in attrs) if (attrs[k] != null) n.setAttribute(k, attrs[k]);
+    if (text != null) n.textContent = text;
+    return n;
+  }
+
+  class Player {
+    constructor(host, script, opts) {
+      this.host = host;
+      this.script = script;
+      this.opts = opts || {};
+      this.index = -1;
+      this.playing = false;
+      this.timer = null;
+      this.handle = null;
+      this.calloutEl = null;
+      this.marks = [];
+      this.lastSpec = null;
+      this.mount();
+    }
+
+    get steps() { return this.script.steps; }
+
+    mount(spec, swap) {
+      this.host.innerHTML = '';
+      const { svg, reg } = MT.diagrams.render(spec || this.script.diagram);
+      this.handle = { svg, reg };
+      this.host.appendChild(svg);
+      if (swap) svg.classList.add('swap-in');
+      this.svg = svg;
+      this.index = -1;
+    }
+
+    /** 清空所有 op 造成的状态，重新画一遍 */
+    resetCanvas(spec, swap) {
+      this.mount(spec, swap);
+    }
+
+    find(id) { return this.handle.reg[id] || null; }
+
+    clearOverlays() {
+      if (this.calloutEl) { this.calloutEl.remove(); this.calloutEl = null; }
+      this.marks.forEach((m) => m.remove());
+      this.marks = [];
+    }
+
+    /** 依次应用 0..i 步的 ops */
+    goto(i, animate) {
+      const n = this.steps.length;
+      i = Math.max(0, Math.min(n - 1, i));
+      if (i === this.index) return;
+      const forward = i > this.index;
+
+      // 步骤可以带自己的图：从最近一次换图的那一步开始应用 ops
+      let start = 0;
+      for (let k = i; k >= 0; k--) { if (this.steps[k].diagram) { start = k; break; } }
+      const spec = this.steps[start].diagram || this.script.diagram;
+      const swapped = this.lastSpec !== spec;
+      this.lastSpec = spec;
+
+      this.resetCanvas(spec, swapped);
+      this.clearOverlays();
+      if (this.opts.onNote) this.opts.onNote('');
+      this.pendingFocus = new Set();
+      this.pendingNote = '';
+
+      for (let k = start; k <= i; k++) {
+        const isCurrent = k === i;
+        this.steps[k].ops.forEach((op) => this.applyOp(op, isCurrent && animate !== false));
+      }
+      this.applySpotlight();
+
+      // 移除上一次遗留的 focus（只保留当前步产生的）
+      this.index = i;
+      const step = this.steps[i];
+
+      // 自动滚动到当前步骤（由外部处理）
+      if (this.opts.onStep) this.opts.onStep(i, step, forward);
+    }
+
+    applyOp(op, animate) {
+      if (!op) return;
+      const ids = op.ids || (op.id ? [op.id] : []);
+      const els = ids.map((id) => this.find(id)).filter(Boolean);
+
+      switch (op.op) {
+        case 'focus': {
+          (op.ids || []).forEach((id) => this.pendingFocus.add(id));
+          if (op.text) this.pendingNote = op.text;
+          break;
+        }
+        case 'dim':
+          els.forEach((el) => el.classList.add('dim'));
+          break;
+        case 'show':
+          els.forEach((el) => el.classList.remove('hidden'));
+          break;
+        case 'hide':
+          els.forEach((el) => el.classList.add('hidden'));
+          break;
+        case 'set': {
+          const el = this.find(op.id);
+          if (!el) break;
+          if (el._special) { el._special(op.text); break; }
+          if (el._text) {
+            el._text.textContent = op.text;
+            if (animate) {
+              el._text.classList.remove('mark-in');
+              void el._text.offsetWidth;
+              el._text.classList.add('mark-in');
+            }
+          }
+          break;
+        }
+        case 'mark':
+          els.forEach((el) => this.addMark(el, op.text || '✓'));
+          break;
+        case 'pulse':
+          els.forEach((el) => {
+            if (reduceMotion) return;
+            el.classList.remove('pulse');
+            void el.getBoundingClientRect();
+            el.classList.add('pulse');
+            setTimeout(() => el.classList.remove('pulse'), 2400);
+          });
+          break;
+      }
+    }
+
+    /** 当前步的聚光灯：同一步里的多个 focus 取并集 */
+    applySpotlight() {
+      const ids = this.pendingFocus;
+      if (!ids || !ids.size) return;
+      const reg = this.handle.reg;
+      Object.keys(reg).forEach((id) => {
+        reg[id].classList.remove('focus');
+        reg[id].classList.remove('dim');
+      });
+      let hit = 0;
+      Object.keys(reg).forEach((id) => {
+        if (ids.has(id)) { reg[id].classList.add('focus'); hit++; }
+        else reg[id].classList.add('dim');
+      });
+      if (!hit) {
+        // 一个都没对上：宁可不压暗，也不要让整张图灰掉
+        Object.keys(reg).forEach((id) => reg[id].classList.remove('dim'));
+        return;
+      }
+      if (this.opts.onNote) this.opts.onNote(this.pendingNote || '');
+    }
+
+    showCallout(el, str) {      if (this.calloutEl) this.calloutEl.remove();
+      let bb;
+      try { bb = el.getBBox(); } catch (e) { return; }
+      const W = MT.diagrams.W;
+      const w = Math.min(300, Math.max(90, str.length * 14 + 26));
+      const h = 34;
+      let cx = bb.x + bb.width / 2;
+      let x = Math.max(8, Math.min(W - w - 8, cx - w / 2));
+      let y = bb.y - h - 14;
+      if (y < 6) y = bb.y + bb.height + 12;
+
+      const g = svgNode('g', { class: 'callout mark-in' });
+      g.appendChild(svgNode('rect', { x, y, width: w, height: h, rx: 10, fill: '#2B3644', opacity: 0.96 }));
+      const tailX = cx;
+      const tailY = y < bb.y ? y + h : y;
+      const dir = y < bb.y ? 1 : -1;
+      g.appendChild(svgNode('path', {
+        d: `M${tailX - 7} ${tailY} L${tailX} ${tailY + dir * 8} L${tailX + 7} ${tailY} Z`,
+        fill: '#2B3644', opacity: 0.96
+      }));
+      g.appendChild(svgNode('text', {
+        x: x + w / 2, y: y + 22, 'text-anchor': 'middle',
+        fill: '#fff', 'font-size': 13.5, 'font-weight': 600
+      }, str.length > 20 ? str.slice(0, 19) + '…' : str));
+      this.svg.appendChild(g);
+      this.calloutEl = g;
+    }
+
+    addMark(el, str) {
+      let bb;
+      try { bb = el.getBBox(); } catch (e) { return; }
+      const w = Math.max(28, str.length * 13 + 18);
+      const x = Math.min(MT.diagrams.W - w - 6, bb.x + bb.width - 4);
+      const y = Math.max(4, bb.y - 16);
+      const g = svgNode('g', { class: 'mark-in' });
+      g.appendChild(svgNode('rect', { x, y, width: w, height: 26, rx: 13, fill: '#2FA36B' }));
+      g.appendChild(svgNode('text', {
+        x: x + w / 2, y: y + 18, 'text-anchor': 'middle', fill: '#fff',
+        'font-size': 13, 'font-weight': 700
+      }, str.length > 8 ? str.slice(0, 8) : str));
+      this.svg.appendChild(g);
+      this.marks.push(g);
+    }
+
+    play() {
+      if (this.playing) return;
+      if (this.index >= this.steps.length - 1) this.goto(0, true);
+      this.playing = true;
+      this.notifyPlay();
+      const tick = () => {
+        if (!this.playing) return;
+        if (this.index >= this.steps.length - 1) { this.stop(); return; }
+        this.goto(this.index + 1, true);
+        this.timer = setTimeout(tick, this.opts.interval || 1500);
+      };
+      this.timer = setTimeout(tick, 260);
+    }
+
+    stop() {
+      this.playing = false;
+      clearTimeout(this.timer);
+      this.timer = null;
+      this.notifyPlay();
+    }
+
+    next() { this.stop(); if (this.index < this.steps.length - 1) this.goto(this.index + 1, true); }
+    prev() { this.stop(); if (this.index > 0) this.goto(this.index - 1, true); }
+    restart() { this.stop(); this.goto(0, true); }
+    jump(i) { this.stop(); this.goto(i, true); }
+
+    notifyPlay() { if (this.opts.onPlay) this.opts.onPlay(this.playing); }
+  }
+
+  MT.Player = Player;
+})();
+
+
+/* ==================== 80-app.js ==================== */
+/* 80-app.js —— 界面与流程 */
+(function () {
+  const MT = (window.MT = window.MT || {});
+  const { $, $$, el, store, toast, inlineMd, escapeHtml } = MT.util;
+
+  const state = {
+    grade: store.get('grade', 4),
+    method: store.get('method', 'arithmetic'),
+    unit1: store.get('unit1', false),
+    script: null,
+    player: null,
+    verify: null,
+    busy: false
+  };
+
+  /* ---------------- 控件 ---------------- */
+  function initControls() {
+    const gc = $('#gradeChips');
+    for (let g = 1; g <= 6; g++) {
+      const b = el('button', { type: 'button', class: 'chip', 'data-grade': g, text: g + '年级' });
+      b.addEventListener('click', () => setGrade(g));
+      gc.appendChild(b);
+    }
+    $$('#methodChips .chip').forEach((b) => b.addEventListener('click', () => setMethod(b.dataset.method)));
+    $('#unit1').addEventListener('change', (e) => {
+      state.unit1 = e.target.checked;
+      store.set('unit1', state.unit1);
+      $('#unit1Text').textContent = state.unit1 ? '使用' : '不用';
+      updateHint();
+    });
+    syncControls();
+  }
+
+  function syncControls() {
+    $$('#gradeChips .chip').forEach((b) => b.classList.toggle('active', Number(b.dataset.grade) === state.grade));
+    $$('#methodChips .chip').forEach((b) => b.classList.toggle('active', b.dataset.method === state.method));
+    $('#unit1').checked = state.unit1;
+    $('#unit1Text').textContent = state.unit1 ? '使用' : '不用';
+    updateHint();
+  }
+
+  function setGrade(g) {
+    state.grade = g;
+    store.set('grade', g);
+    $$('#gradeChips .chip').forEach((b) => b.classList.toggle('active', Number(b.dataset.grade) === g));
+    updateHint();
+  }
+
+  function setMethod(m) {
+    state.method = m;
+    store.set('method', m);
+    $$('#methodChips .chip').forEach((b) => b.classList.toggle('active', b.dataset.method === m));
+    updateHint();
+  }
+
+  function updateHint() {
+    const hint = $('#ctrlHint');
+    hint.classList.remove('strong');
+    if (state.method === 'equation' && state.grade <= 3) {
+      hint.textContent = '三年级以下用方程会跳步，建议先用算术解；如果孩子已经会设未知数，也可以继续。';
+      hint.classList.add('strong');
+    } else if (state.unit1 && state.grade <= 4) {
+      hint.textContent = '单位 1 一般从五年级分数乘除开始用。低年级选了也没关系——遇到不涉及的题会自动忽略。';
+      hint.classList.add('strong');
+    } else if (state.grade >= 5 && state.method === 'arithmetic' && !state.unit1) {
+      hint.textContent = '五年级以上遇到分数、百分数、倍比题时，打开「单位 1」讲得更透。';
+    } else {
+      hint.textContent = '三年级以上推荐「算术解」；五六年级可试「方程解」；单位 1 只在分数、百分数、倍比题里起作用。';
+    }
+  }
+
+  /* ---------------- 示例题 ---------------- */
+  function initExamples() {
+    const wrap = $('#examples');
+    MT.demo.examples.forEach((ex) => {
+      const b = el('button', { type: 'button', class: 'example', text: ex.label, title: ex.text });
+      b.addEventListener('click', () => {
+        $('#problem').value = ex.text;
+        setGrade(ex.grade);
+        $('#problem').focus();
+      });
+      wrap.appendChild(b);
+    });
+  }
+
+  function randomExample() {
+    const list = MT.demo.examples;
+    const ex = list[Math.floor(Math.random() * list.length)];
+    $('#problem').value = ex.text;
+    setGrade(ex.grade);
+    toast('换了一道：' + ex.label);
+  }
+
+  /* ---------------- 加载遮罩 ---------------- */
+  let loadingTimer = null, loadingStart = 0;
+  const TIPS = [
+    '把题目拆成数量关系',
+    '想一想：谁是单位 1？',
+    '先画图，再列式',
+    '线段长度要按份数成比例',
+    '算完回头验一验',
+    '图上找不到依据的算式，不要写'
+  ];
+
+  function showLoading(hasImage) {
+    const box = $('#loading');
+    box.hidden = false;
+    loadingStart = performance.now();
+    let tipIndex = 0;
+    $('#loadingTitle').textContent = hasImage ? '正在读图…' : '正在读题…';
+    $('#loadingTip').textContent = TIPS[0];
+    $('#loadingBar').style.width = '6%';
+    $('#loadingTime').textContent = '0.0s';
+    clearInterval(loadingTimer);
+    loadingTimer = setInterval(() => {
+      const t = (performance.now() - loadingStart) / 1000;
+      $('#loadingTime').textContent = t.toFixed(1) + 's';
+      $('#loadingBar').style.width = Math.min(88, 6 + t * 4.2).toFixed(0) + '%';
+      tipIndex = Math.floor(t / 2.6) % TIPS.length;
+      $('#loadingTip').textContent = TIPS[tipIndex];
+      if (t > 3) $('#loadingTitle').textContent = '正在构思图解…';
+      if (t > 8) $('#loadingTitle').textContent = '正在写讲解…';
+      if (t > 16) $('#loadingTitle').textContent = '模型在慢慢想，再等一下…';
+    }, 200);
+  }
+
+  function hideLoading(ok) {
+    clearInterval(loadingTimer);
+    const bar = $('#loadingBar');
+    bar.style.width = '100%';
+    setTimeout(() => { $('#loading').hidden = true; bar.style.width = '6%'; }, ok ? 260 : 0);
+  }
+
+  /* ---------------- 解题 ---------------- */
+  async function solve(opts) {
+    opts = opts || {};
+    if (state.busy) return;
+    const problem = (opts.problem != null ? opts.problem : $('#problem').value || '').trim();
+    const image = opts.image !== undefined ? opts.image : (shotData ? shotData.dataUrl : null);
+    if (!problem && !image) {
+      toast('贴一道题，或者拍张照片');
+      $('#problem').focus();
+      return;
+    }
+    if (!MT.llm.isConfigured()) {
+      openSettings();
+      toast('先连接一个模型：填好服务商和 API Key 就可以开始了');
+      return;
+    }
+    if (image && !MT.llm.visionModelOf(MT.llm.getConfig())) {
+      hintVision();
+      toast('带图讲解要选一个能看图的模型', 'err', 4200);
+      return;
+    }
+
+    state.busy = true;
+    const btn = $('#btnSolve');
+    btn.classList.add('busy');
+    btn.querySelector('.solve-txt').textContent = '讲解中';
+    showLoading(!!image);
+
+    try {
+      const res = await MT.agent.solve({
+        problem, grade: state.grade, method: state.method, unit1: state.unit1,
+        image: image || undefined,
+        nudge: opts.nudge,
+        onPhase: (p) => {
+          const map = { reading: '正在读图…', thinking: '正在读题…', parsing: '正在整理图解…', checking: '正在核对算式…', fixing: '发现一处可疑，正在复核…', repair: '格式没对上，重新生成…' };
+          if (map[p]) $('#loadingTitle').textContent = map[p];
+        }
+      });
+      hideLoading(true);
+      render(res);
+      if (problem) store.set('lastProblem', problem);
+      state.lastModel = res.model;
+    } catch (e) {
+      hideLoading(false);
+      console.error(e);
+      const msg = String(e.message || e);
+      toast(msg.startsWith('还没有') ? msg : '出错了：' + msg.slice(0, 100), 'err', 5600);
+    } finally {
+      state.busy = false;
+      btn.classList.remove('busy');
+      btn.querySelector('.solve-txt').textContent = '开始讲解';
+    }
+  }
+
+  /* ---------------- 渲染一节课 ---------------- */
+  function render(res) {
+    const script = res.script;
+    state.script = script;
+    state.verify = res.verify;
+
+    // 头部
+    $('#metaTopic').textContent = script.meta.topic || '数学题';
+    $('#stageTitle').textContent = script.plan.headline || script.problem.question || '讲解';
+
+    const tags = [];
+    tags.push(`<span class="tag blue">${MT.prompt.GRADE_NAME[script.meta.grade]}·${script.meta.method === 'equation' ? '方程解' : '算术解'}</span>`);
+    if (script.meta.unit1Used) tags.push('<span class="tag purple">用了单位 1</span>');
+    else if (script.meta.unit1) tags.push('<span class="tag">未涉及单位 1</span>');
+    if (script.meta.gradeFit === 'above') tags.push('<span class="tag amber">超出本年级</span>');
+    if (script.meta.gradeFit === 'below') tags.push('<span class="tag">低于本年级</span>');
+    if (res.warnings && res.warnings.length) tags.push('<span class="tag amber">图解待完善</span>');
+    $('#stageMeta').innerHTML = tags.join('');
+
+    // 播放器
+    if (state.player) state.player.stop();
+    const svgHost = $('#svgHost');
+    $('#narration').hidden = true;
+    state.player = new MT.Player(svgHost, script, {
+      interval: Number($('#speed').value),
+      onStep: onStepChange,
+      onNote: (text) => {
+        const n = $('#narration');
+        if (!text) { n.hidden = true; n.textContent = ''; return; }
+        n.hidden = false;
+        n.textContent = text;
+        n.classList.remove('in');
+        void n.offsetWidth;
+        n.classList.add('in');
+      },
+      onPlay: (playing) => {
+        $('#player').classList.toggle('playing', playing);
+        $('#btnPlay').title = playing ? '暂停' : '自动播放';
+      }
+    });
+
+    // 步骤列表
+    renderSteps(script, res.verify);
+
+    // 底部信息
+    renderFoot(script, res);
+
+    // 自检徽标
+    const pill = $('#checkPill');
+    const bad = res.verify ? res.verify.bad : 0;
+    pill.hidden = false;
+    pill.classList.toggle('bad', bad > 0);
+    pill.textContent = bad > 0 ? `${bad} 处算式待核对` : (res.verify && res.verify.total ? '✓ 算式已复核' : '✓ 讲解完成');
+
+    // 追问可用
+    $('#qaInput').disabled = false;
+    $('#qaSend').disabled = false;
+    $('#qaLog').innerHTML = '';
+    $('#btnRethink').hidden = false;
+
+    state.player.goto(0, true);
+  }
+
+  function renderSteps(script, verify) {
+    const list = $('#stepsList');
+    list.innerHTML = '';
+    script.steps.forEach((s, i) => {
+      const li = el('li', { class: 'step', 'data-i': i });
+      const num = el('span', { class: 'step-num', text: String(i + 1) });
+      const body = el('div', { class: 'step-body' });
+
+      const head = el('div', { class: 'step-title' });
+      head.innerHTML = escapeHtml(s.title) + `<span class="phase">${escapeHtml(s.phase)}</span>`;
+      body.appendChild(head);
+
+      if (s.text) body.appendChild(el('div', { class: 'step-text' }, inlineMd(s.text)));
+      if (s.math) body.appendChild(el('div', { class: 'step-math', text: s.math }));
+      if (s.why) body.appendChild(el('div', { class: 'step-why', text: '💡 ' + s.why }));
+
+      const r = verify && verify.results[i];
+      if (r && r.status === 'bad') {
+        body.appendChild(el('div', { class: 'step-err', text: '⚠ 这一步算不平：' + (r.message || '') }));
+        li.classList.add('bad');
+      }
+
+      li.appendChild(num);
+      li.appendChild(body);
+      li.addEventListener('click', () => { if (state.player) state.player.jump(i); });
+      list.appendChild(li);
+    });
+  }
+
+  function renderFoot(script, res) {
+    const foot = $('#stageFoot');
+    foot.innerHTML = '';
+    if (script.plan.relation) {
+      const chip = el('span', { class: 'formula-chip', text: script.plan.relation });
+      foot.appendChild(el('span', { text: '数量关系：' }));
+      foot.appendChild(chip);
+    }
+    if (script.meta.note) {
+      foot.appendChild(el('span', { class: 'tag', text: script.meta.note }));
+    }
+    (script.checks || []).slice(0, 3).forEach((c) => {
+      const ok = MT.expr.checkMath(c).status !== 'bad';
+      const chip = el('span', { class: 'formula-chip', text: (ok ? '✓ ' : '⚠ ') + c });
+      chip.style.background = ok ? '#E7F6EE' : '#FDEDE9';
+      chip.style.borderColor = ok ? '#C8EAD8' : '#F6CFC6';
+      chip.style.color = ok ? '#1F7A4D' : '#A33A28';
+      foot.appendChild(chip);
+    });
+    if (script.answer.sentence) {
+      foot.appendChild(el('span', { class: 'tag green', text: '答案：' + script.answer.sentence }));
+    }
+  }
+
+  function onStepChange(i, step) {
+    $$('#stepsList .step').forEach((li, k) => {
+      li.classList.toggle('active', k === i);
+      li.classList.toggle('done', k < i);
+    });
+    const n = state.script.steps.length;
+    $('#stepCounter').textContent = (i + 1) + ' / ' + n;
+    $('#stepName').textContent = step.title || '';
+    $('#trackFill').style.width = ((i + 1) / n * 100) + '%';
+
+    const active = $('#stepsList .step.active');
+    if (active) {
+      const list = $('#stepsList');
+      const top = active.offsetTop - list.offsetTop;
+      if (top < list.scrollTop || top + active.offsetHeight > list.scrollTop + list.clientHeight) {
+        list.scrollTo({ top: top - 12, behavior: 'smooth' });
+      }
+    }
+  }
+
+  /* ---------------- 追问 ---------------- */
+  function initQA() {
+    const form = $('#qaForm');
+    const input = $('#qaInput');
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const q = input.value.trim();
+      if (!q || !state.script) return;
+      input.value = '';
+      appendBubble('ask', q);
+      const pending = appendBubble('ans', '正在想…', 'pending');
+      input.disabled = true;
+      try {
+        const res = await MT.agent.ask(state.script, q);
+        pending.classList.remove('pending');
+        pending.textContent = res.text || '这个问题我还没想清楚，换个问法试试？';
+        if (res.step && state.player) state.player.jump(Math.max(0, res.step - 1));
+        if (res.focus && res.focus.length && state.player) {
+          state.player.applyOp({ op: 'focus', ids: res.focus, text: '' });
+        }
+      } catch (err) {
+        pending.classList.remove('pending');
+        pending.textContent = '没问上：' + String(err.message || err).slice(0, 80);
+      } finally {
+        input.disabled = false;
+        $('#qaSend').disabled = false;
+        input.focus();
+      }
+    });
+    $('#qaLog').addEventListener('click', (e) => e.stopPropagation());
+  }
+
+  function appendBubble(kind, text, extraClass) {
+    const log = $('#qaLog');
+    const b = el('div', { class: 'qa-bubble ' + kind + (extraClass ? ' ' + extraClass : ''), text });
+    log.appendChild(b);
+    log.scrollTop = log.scrollHeight;
+    return b;
+  }
+
+  /* ---------------- 内置示例（无需 Key） ---------------- */
+  let demoIndex = -1;
+  function showDemo(advance, force) {
+    const list = MT.demo.lessons;
+    if (force != null) demoIndex = force % list.length;
+    else if (advance) demoIndex = (demoIndex + 1) % list.length;
+    else demoIndex = Math.max(0, demoIndex);
+
+    const out = MT.schema.normalize(list[demoIndex]);
+    const v = MT.schema.verify(out.script);
+    render({ script: out.script, warnings: out.warnings, verify: v, ms: 0, calls: 0 });
+    if (advance || force != null) {
+      toast(`内置示例 ${demoIndex + 1}/${list.length}：${out.script.meta.topic || ''}（不需要 Key）`);
+    }
+  }
+
+  /* ---------------- 拍照 / 上传题目图片 ---------------- */
+  let shotData = null;
+
+  function setShotStatus(text, cls) {
+    const n = $('#shotStatus');
+    n.textContent = text;
+    n.className = cls || '';
+  }
+
+  function clearShot() {
+    shotData = null;
+    $('#shotRow').hidden = true;
+    $('#shotImg').removeAttribute('src');
+    $('#problem').placeholder = PLACEHOLDER_DEFAULT;
+  }
+
+  const PLACEHOLDER_DEFAULT = '把题目粘贴到这里，比如：小明有 48 元，小红的钱是小明的 3/4，两个人一共有多少元？';
+
+  function hintVision() {
+    openSettings();
+    setTimeout(() => {
+      const inp = $('#visionModel');
+      inp.focus();
+      inp.style.borderColor = '#FFB392';
+      $('#testResult').textContent = '拍照/传图讲解必须用一个能看图的模型，填好识图模型再保存';
+      $('#testResult').className = 'test-result bad';
+    }, 140);
+  }
+
+  async function handleImage(file) {
+    if (!file) return;
+    if (!/^image\//.test(file.type || '')) { toast('请选择图片文件（JPG / PNG）'); return; }
+    if (file.size > 12 * 1024 * 1024) { toast('图片超过 12MB，先压缩一下'); return; }
+
+    try {
+      const small = await MT.image.shrink(file);
+      shotData = small;
+      $('#shotImg').src = small.dataUrl;
+      $('#shotTitle').textContent = `题目图片 · ${small.w}×${small.h}`;
+      $('#shotRow').hidden = false;
+
+      const cfg = MT.llm.getConfig();
+      const vm = MT.llm.visionModelOf(cfg);
+      if (!MT.llm.isConfigured()) {
+        setShotStatus('已附加 · 还没配置模型', 'bad');
+        openSettings();
+        return;
+      }
+      if (!vm) {
+        const preset = MT.llm.PRESETS.find((x) => x.id === cfg.provider);
+        const name = (preset && preset.name) || '当前服务商';
+        setShotStatus(`已附加 · ${name}看不了图，要换个服务商`, 'bad');
+        toast(`${name}没有视觉模型：请在设置里换成 通义千问 / 硅基流动 / Kimi 之一，再回来讲解`, 'err', 6200);
+        hintVision();
+        return;
+      }
+      setShotStatus(`已附加 · 将用 ${vm} 读图讲解`, 'ok');
+      $('#problem').placeholder = '（可选）补充说明，比如：只讲第 2 问，或者图上第 3 题';
+      $('#problem').focus();
+    } catch (e) {
+      toast(String(e.message || e), 'err');
+    }
+  }
+
+  function initShoot() {
+    const input = $('#fileInput');
+    $('#btnShoot').addEventListener('click', () => input.click());
+    input.addEventListener('change', () => {
+      const f = input.files && input.files[0];
+      if (f) handleImage(f);
+      input.value = '';
+    });
+    $('#shotRemove').addEventListener('click', clearShot);
+
+    const ask = $('.ask');
+    ['dragenter', 'dragover'].forEach((ev) => ask.addEventListener(ev, (e) => {
+      if (!e.dataTransfer) return;
+      e.preventDefault();
+      ask.classList.add('dragover');
+    }));
+    ['dragleave', 'drop'].forEach((ev) => ask.addEventListener(ev, (e) => {
+      e.preventDefault();
+      if (ev === 'dragleave' && e.relatedTarget && ask.contains(e.relatedTarget)) return;
+      ask.classList.remove('dragover');
+    }));
+    ask.addEventListener('drop', (e) => {
+      const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (f) handleImage(f);
+    });
+
+    $('#problem').addEventListener('paste', (e) => {
+      const items = e.clipboardData && e.clipboardData.items;
+      if (!items) return;
+      for (const it of items) {
+        if (it.type && it.type.indexOf('image/') === 0) {
+          e.preventDefault();
+          handleImage(it.getAsFile());
+          return;
+        }
+      }
+    });
+  }
+
+  /* ---------------- 设置 ---------------- */
+  function fillPreset(id) {
+    const p = MT.llm.PRESETS.find((x) => x.id === id) || MT.llm.PRESETS[0];
+    $('#baseUrl').value = p.base;
+    $('#model').value = p.model;
+    $('#providerNote').textContent = p.note;
+    const chips = $('#modelChips');
+    chips.innerHTML = '';
+    (p.models || []).forEach((m) => {
+      const c = el('button', { type: 'button', class: 'chip', text: m });
+      c.addEventListener('click', () => { $('#model').value = m; });
+      chips.appendChild(c);
+    });
+    $('#visionModel').value = p.vision || '';
+    const vchips = $('#visionChips');
+    vchips.innerHTML = '';
+    if (!(p.visionModels || []).length) {
+      vchips.appendChild(el('span', { class: 'field-note', text: '这家没有内置视觉模型，可以留空' }));
+    }
+    (p.visionModels || []).forEach((m) => {
+      const c = el('button', { type: 'button', class: 'chip', text: m });
+      c.addEventListener('click', () => { $('#visionModel').value = m; });
+      vchips.appendChild(c);
+    });
+  }
+
+  function openSettings() {
+    const cfg = MT.llm.getConfig();
+    const sel = $('#provider');
+    if (!sel.options.length) {
+      MT.llm.PRESETS.forEach((p) => sel.appendChild(el('option', { value: p.id, text: p.name })));
+    }
+    sel.value = cfg.provider;
+    $('#baseUrl').value = cfg.baseUrl;
+    $('#model').value = cfg.model;
+    $('#apiKey').value = cfg.apiKey;
+    $('#temperature').value = cfg.temperature;
+    $('#tempVal').textContent = cfg.temperature;
+    $('#jsonMode').checked = cfg.jsonMode;
+    $('#visionModel').value = cfg.visionModel || '';
+    const preset = MT.llm.PRESETS.find((x) => x.id === cfg.provider) || MT.llm.PRESETS[0];
+    $('#providerNote').textContent = preset.note;
+    const chips = $('#modelChips');
+    chips.innerHTML = '';
+    (preset.models || []).forEach((m) => {
+      const c = el('button', { type: 'button', class: 'chip', text: m });
+      c.addEventListener('click', () => { $('#model').value = m; });
+      chips.appendChild(c);
+    });
+    const vchips = $('#visionChips');
+    vchips.innerHTML = '';
+    if (!(preset.visionModels || []).length) {
+      vchips.appendChild(el('span', { class: 'field-note', text: '这家服务商没有视觉模型，拍图讲解请换成通义千问 / 硅基流动 / Kimi' }));
+    }
+    (preset.visionModels || []).forEach((m) => {
+      const c = el('button', { type: 'button', class: 'chip', text: m });
+      c.addEventListener('click', () => { $('#visionModel').value = m; });
+      vchips.appendChild(c);
+    });
+    $('#testResult').textContent = '';
+    $('#testResult').className = 'test-result';
+    $('#settingsModal').hidden = false;
+  }
+
+  function closeSettings() { $('#settingsModal').hidden = true; }
+
+  function readForm() {
+    return {
+      provider: $('#provider').value,
+      baseUrl: $('#baseUrl').value.trim(),
+      model: $('#model').value.trim(),
+      visionModel: $('#visionModel').value.trim(),
+      apiKey: $('#apiKey').value.trim(),
+      temperature: Number($('#temperature').value),
+      jsonMode: $('#jsonMode').checked
+    };
+  }
+
+  function updateModelPill() {
+    const cfg = MT.llm.getConfig();
+    const pill = $('#modelPill');
+    if (cfg.apiKey && cfg.model) {
+      pill.textContent = cfg.model;
+      pill.className = 'model-pill ok';
+      pill.title = '已连接：' + cfg.model;
+    } else {
+      pill.textContent = '未配置模型';
+      pill.className = 'model-pill warn';
+      pill.title = '点右上角设置，填入 API Key';
+    }
+  }
+
+  function initSettings() {
+    $('#btnSettings').addEventListener('click', openSettings);
+    $$('#settingsModal [data-close]').forEach((n) => n.addEventListener('click', closeSettings));
+    $('#provider').addEventListener('change', (e) => fillPreset(e.target.value));
+    $('#temperature').addEventListener('input', (e) => { $('#tempVal').textContent = e.target.value; });
+    $('#btnEye').addEventListener('click', () => {
+      const inp = $('#apiKey');
+      inp.type = inp.type === 'password' ? 'text' : 'password';
+      $('#btnEye').textContent = inp.type === 'password' ? '显示' : '隐藏';
+    });
+    $('#btnSaveSettings').addEventListener('click', () => {
+      MT.llm.saveConfig(readForm());
+      updateModelPill();
+      closeSettings();
+      toast('设置已保存（只存在这台电脑上）', 'ok');
+    });
+    $('#btnClearKey').addEventListener('click', () => {
+      MT.llm.clearKey();
+      $('#apiKey').value = '';
+      updateModelPill();
+      toast('已清除密钥');
+    });
+    $('#btnTest').addEventListener('click', async () => {
+      const cfg = readForm();
+      const box = $('#testResult');
+      if (!cfg.apiKey) { box.textContent = '先填 API Key'; box.className = 'test-result bad'; return; }
+      box.textContent = '测试中…';
+      box.className = 'test-result';
+      try {
+        const r = await MT.llm.test(cfg);
+        box.textContent = `连接成功 · ${r.ms}ms`;
+        box.className = 'test-result ok';
+      } catch (e) {
+        box.textContent = String(e.message || e).slice(0, 60);
+        box.className = 'test-result bad';
+      }
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !$('#settingsModal').hidden) closeSettings();
+    });
+  }
+
+  /* ---------------- 播放器按钮 ---------------- */
+  function initPlayer() {
+    $('#btnPlay').addEventListener('click', () => {
+      if (!state.player) return;
+      if (state.player.playing) state.player.stop(); else state.player.play();
+    });
+    $('#btnNext').addEventListener('click', () => state.player && state.player.next());
+    $('#btnPrev').addEventListener('click', () => state.player && state.player.prev());
+    $('#btnRestart').addEventListener('click', () => state.player && state.player.restart());
+    $('#speed').addEventListener('change', (e) => { if (state.player) state.player.opts.interval = Number(e.target.value); });
+
+    document.addEventListener('keydown', (e) => {
+      const tag = (e.target.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+      if (!state.player) return;
+      if (e.key === 'ArrowRight') { e.preventDefault(); state.player.next(); }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); state.player.prev(); }
+      else if (e.key === ' ') { e.preventDefault(); if (state.player.playing) state.player.stop(); else state.player.play(); }
+    });
+  }
+
+  /* ---------------- 启动 ---------------- */
+  function init() {
+    if (!$('#gradeChips')) return; // 非主页面（如渲染预览页）直接跳过
+    initControls();
+    initExamples();
+    initSettings();
+    initPlayer();
+    initQA();
+    initShoot();
+    updateModelPill();
+    updateHint();
+
+    $('#btnSolve').addEventListener('click', () => solve());
+    $('#problem').addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') solve();
+    });
+    $('#btnClear').addEventListener('click', () => {
+      $('#problem').value = '';
+      clearShot();
+      $('#problem').focus();
+    });
+    $('#btnRandom').addEventListener('click', randomExample);
+    $('#btnRethink').addEventListener('click', () => {
+      solve({ nudge: '换一种更直观的讲解顺序，多用图上的动作，少讲抽象的话。' });
+    });
+    $('#btnDemo').addEventListener('click', () => showDemo(true));
+
+    const last = store.get('lastProblem', '');
+    if (last) $('#problem').value = last;
+
+    // 便于截图/演示：打开 #demo / #demo1..3 / #demo3s4（第 4 步）直接渲染内置示例
+    const hash = location.hash.match(/^#demo(\d)?(?:s(\d+))?$/);
+    if (hash) {
+      const idx = hash[1] ? Number(hash[1]) - 1 : 0;
+      const stepN = Number(hash[2]) || 0;
+      setTimeout(() => {
+        showDemo(false, idx);
+        if (stepN && state.player) state.player.jump(stepN - 1);
+      }, 80);
+    }
+
+    if (!MT.llm.isConfigured()) {
+      setTimeout(() => toast('第一次使用：点右上角「设置」填入 API Key，或先点「看示例」'), 900);
+    }
+
+    // 调试/演示用锚点
+    if (location.hash === '#settings') setTimeout(() => {
+      openSettings();
+      const card = $('.modal-card');
+      if (card) card.style.animation = 'none';
+    }, 120);
+    if (location.hash === '#shot') {
+      const fake = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="520" height="300"><rect width="520" height="300" fill="#fff"/>
+         <text x="26" y="46" font-size="17" fill="#333">9. 甲容器中有纯酒精 10 kg，乙容器中有水</text>
+         <text x="26" y="76" font-size="17" fill="#333">18 kg。第一次将甲容器中的一部分纯酒精倒</text>
+         <text x="26" y="106" font-size="17" fill="#333">入乙容器中……</text></svg>`
+      );
+      $('#shotImg').src = fake;
+      $('#shotTitle').textContent = '题目图片 · 1400×980';
+      $('#shotRow').hidden = false;
+      setShotStatus('已附加 · 将用 qwen-vl-max 读图讲解', 'ok');
+    }
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+
+  MT.app = { state, solve, render, openSettings };
+})();

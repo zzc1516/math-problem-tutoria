@@ -1,0 +1,13 @@
+# 统一换行，避免 Windows / macOS 来回改
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+
+# 单文件产物由 build.mjs 生成，diff 里不必逐行高亮
+dist/*.html linguist-generated=true
+dist/*.js linguist-generated=true

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>图解渲染器预览 · 9 种类型</title>
+<link rel="stylesheet" href="../src/styles.css" />
+<style>
+  html,body{height:auto;overflow:auto;background:#FBFAF7}
+  body{padding:18px 20px}
+  h1{font-size:16px;margin:0 0 14px;color:#243240}
+  .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+  .cell{background:#fff;border:1px solid #E8E1D6;border-radius:16px;overflow:hidden}
+  .cap{font-size:12px;color:#7C8A99;padding:8px 12px;border-bottom:1px solid #F1EBE2}
+  .cell svg{display:block;width:100%;height:auto}
+</style>
+</head>
+<body>
+<h1>图解渲染器预览 · 9 种图各来一张</h1>
+<div class="grid" id="grid"></div>
+
+<script src="../dist/math-tutor.js"></script>
+<script>
+const MT = window.MT;
+const samples = [
+  ['segment 线段图', {
+    type: 'segment', title: '两个人的钱',
+    parts: [
+      { id: 'a', ratio: 4, label: '小明', value: '48 元', color: 'blue' },
+      { id: 'b', ratio: 3, label: '小红', value: '36 元', color: 'orange' }
+    ],
+    total: { id: 'total', label: '一共', value: '84 元' },
+    unitOne: { id: 'a', label: '1' },
+    question: { id: 'q', label: '一共多少元？' }
+  }],
+  ['bars 份数方块', {
+    type: 'bars', unit: '份',
+    rows: [
+      { id: 'r1', label: '乙', ratio: 1, value: '18 张' },
+      { id: 'r2', label: '甲', ratio: 3, value: '54 张' }
+    ]
+  }],
+  ['balance 天平', {
+    type: 'balance',
+    left: { label: '3x + 5', items: [{ id: 'l1', text: '3 个 x' }, { id: 'l2', text: '+ 5' }] },
+    right: { label: '26', items: [{ id: 'r1', text: '26' }] },
+    hint: '两边同时减 5'
+  }],
+  ['area 长方形', {
+    type: 'area', shape: 'rect', dims: { w: 8, h: 5 }, unit: '厘米',
+    labels: { bottom: '8 厘米', left: '5 厘米' }, formula: '8 × 5 = 40（平方厘米）'
+  }],
+  ['solid 圆柱', {
+    type: 'solid', shape: 'cylinder', dims: { r: 2, h: 5 }, unit: '厘米',
+    formula: '3.14 × 2² × 5 = 62.8（立方厘米）'
+  }],
+  ['route 行程', {
+    type: 'route', length: 300, unit: '千米',
+    travelers: [
+      { id: 'a', name: '甲车', pos: 0, dir: 1, speed: '60 千米/时', color: 'blue' },
+      { id: 'b', name: '乙车', pos: 300, dir: -1, speed: '40 千米/时', color: 'orange' }
+    ],
+    marks: [{ id: 'm1', at: 0, label: 'A 地' }, { id: 'm2', at: 300, label: 'B 地' }]
+  }],
+  ['table 鸡兔同笼', {
+    type: 'table',
+    cols: [{ key: 'a', label: '鸡' }, { key: 'b', label: '兔' }, { key: 'c', label: '脚' }],
+    rows: [
+      { id: 'row1', cells: ['8', '0', '16'] },
+      { id: 'row2', cells: ['6', '2', '20'] },
+      { id: 'row3', cells: ['5', '3', '22'] },
+      { id: 'row4', cells: ['3', '5', '26'] }
+    ]
+  }],
+  ['numberline 数轴', {
+    type: 'numberline', min: 0, max: 1,
+    ticks: [{ value: 0, label: '0' }, { value: 0.25, label: '1/4' }, { value: 0.5, label: '1/2' }, { value: 0.75, label: '3/4' }, { value: 1, label: '1' }],
+    marks: [{ id: 'm1', value: 0.75, label: '3/4', color: 'orange' }]
+  }],
+  ['cards 信息卡', {
+    type: 'cards',
+    cards: [
+      { id: 'c1', title: '已知', lines: ['小明 48 元', '小红是小明的 3/4'], color: 'blue' },
+      { id: 'c2', title: '要求', lines: ['两人一共多少元？'], color: 'orange' }
+    ]
+  }]
+];
+
+const grid = document.getElementById('grid');
+samples.forEach(([cap, spec]) => {
+  const cell = document.createElement('div');
+  cell.className = 'cell';
+  cell.innerHTML = '<div class="cap">' + cap + '</div>';
+  const { svg } = MT.diagrams.render(MT.schema.normalize({ meta:{}, problem:{}, diagram: spec, steps:[{title:'x'}], answer:{} }).script.diagram);
+  cell.appendChild(svg);
+  grid.appendChild(cell);
+});
+</script>
+</body>
+</html>

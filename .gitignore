@@ -1,0 +1,26 @@
+# 依赖与构建产物（本项目零依赖，保留以防以后加）
+node_modules/
+pnpm-lock.yaml.tmp
+
+# 本地浏览器配置 / 截图缓存
+.edge-profile/
+.edge-profile-*/
+.tmp/
+tmp/
+
+# 编辑器与系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 日志
+*.log
+npm-debug.log*
+
+# 本机临时令牌（推送用，绝不入库）
+.gitee-token
+*.token
+.env
+.env.local
