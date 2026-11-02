@@ -176,12 +176,17 @@ button{font-family:inherit}
 .hint::before{content:"💡";flex:none;filter:saturate(.9)}
 .hint.strong{color:var(--brand-deep)}
 
-.examples{display:flex;gap:7px;flex-wrap:wrap;margin-top:11px;padding-top:11px;border-top:1px dashed var(--line)}.example{
-  border:1px solid var(--line);background:#fff;color:#5D6B7A;font-size:12px;
-  padding:4px 10px;border-radius:999px;cursor:pointer;transition:.16s;
-  max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+.ctrl-right{margin-left:auto}
+.pick{
+  appearance:none;-webkit-appearance:none;
+  border:1px solid var(--line);background:#fff;border-radius:10px;
+  padding:6px 28px 6px 11px;font-size:13px;font-weight:600;color:#4A5A6A;
+  font-family:inherit;cursor:pointer;outline:none;transition:.16s;max-width:190px;
+  background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.2 4.6 6 8.4l3.8-3.8' fill='none' stroke='%237C8A99' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 9px center;background-size:11px;
 }
-.example:hover{border-color:#FFC3A8;color:var(--brand-deep);background:var(--brand-soft)}
+.pick:hover{border-color:#D9CFC0;background-color:#FFFDF9}
+.pick:focus{border-color:#FFB392;box-shadow:0 0 0 3px rgba(255,107,53,.1)}
 
 /* 出结果后收起输入区，把高度让给图解 */
 .ask.compact{padding:10px 18px 10px}
@@ -189,7 +194,6 @@ button{font-family:inherit}
 .ask.compact .ask-tools{bottom:5px}
 .ask.compact .solve{min-height:44px}
 .ask.compact .hint{display:none}
-.ask.compact .examples{display:none}
 .ask.compact .controls{margin-top:9px}
 
 /* 拍照识题 */
@@ -230,7 +234,7 @@ button{font-family:inherit}
 .stage-col{display:flex;flex-direction:column;gap:12px;min-width:0;min-height:0}
 
 /* ---------------- 舞台 ---------------- */
-.stage{display:flex;flex-direction:column;flex:1 1 auto;min-height:320px;overflow:hidden}
+.stage{display:flex;flex-direction:column;flex:1 1 auto;min-height:400px;overflow:hidden}
 .stage-body{position:relative;flex:1;display:flex;min-height:0}
 .narration{
   position:absolute;left:18px;top:14px;z-index:3;max-width:min(440px,74%);
@@ -279,7 +283,7 @@ button{font-family:inherit}
   min-height:230px;
   display:flex;align-items:center;justify-content:center;
 }
-.svg-host svg{position:absolute;inset:0;width:100%;height:100%;display:block;overflow:visible}
+.svg-host > svg{position:absolute;inset:0;width:100%;height:100%;display:block;overflow:visible}
 
 .empty-state{text-align:center;padding:20px;max-width:440px}
 .empty-art{margin-bottom:10px;opacity:.9}
@@ -519,6 +523,8 @@ input[type=range]{width:100%;accent-color:var(--brand)}
 }
 @media (max-width:720px){
   .app{padding:12px 12px 8px;gap:11px}
+  .ctrl-right{margin-left:0;flex:1 1 100%}
+  .pick{max-width:100%}
   .brand-text h1{font-size:16px}
   .brand-text p{display:none}
   .model-pill{display:none}

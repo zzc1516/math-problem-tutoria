@@ -74,7 +74,7 @@
     <div class="controls">
       <div class="ctrl">
         <span class="ctrl-label">年级</span>
-        <div class="chips" id="gradeChips" role="radiogroup" aria-label="年级"></div>
+        <select id="gradeSelect" class="pick" aria-label="年级"></select>
       </div>
       <div class="ctrl">
         <span class="ctrl-label">解法</span>
@@ -91,11 +91,13 @@
           <span class="switch-text" id="unit1Text">不用</span>
         </label>
       </div>
+      <div class="ctrl ctrl-right">
+        <span class="ctrl-label">示例</span>
+        <select id="exampleSelect" class="pick" aria-label="示例题"></select>
+      </div>
     </div>
 
     <div class="hint" id="ctrlHint">三年级以上推荐「算术解」；五六年级可试「方程解」；单位 1 只在分数、百分数、倍比题里起作用。</div>
-
-    <div class="examples" id="examples"></div>
   </section>
 
   <main class="workspace">

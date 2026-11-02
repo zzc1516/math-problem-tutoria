@@ -2620,12 +2620,12 @@ ${answerMsg}
 
   /* ---------------- 控件 ---------------- */
   function initControls() {
-    const gc = $('#gradeChips');
+    const sel = $('#gradeSelect');
     for (let g = 1; g <= 6; g++) {
-      const b = el('button', { type: 'button', class: 'chip', 'data-grade': g, text: g + '年级' });
-      b.addEventListener('click', () => setGrade(g));
-      gc.appendChild(b);
+      sel.appendChild(el('option', { value: g, text: g + '年级' }));
     }
+    sel.addEventListener('change', () => setGrade(Number(sel.value)));
+
     $$('#methodChips .chip').forEach((b) => b.addEventListener('click', () => setMethod(b.dataset.method)));
     $('#unit1').addEventListener('change', (e) => {
       state.unit1 = e.target.checked;
@@ -2637,7 +2637,7 @@ ${answerMsg}
   }
 
   function syncControls() {
-    $$('#gradeChips .chip').forEach((b) => b.classList.toggle('active', Number(b.dataset.grade) === state.grade));
+    $('#gradeSelect').value = String(state.grade);
     $$('#methodChips .chip').forEach((b) => b.classList.toggle('active', b.dataset.method === state.method));
     $('#unit1').checked = state.unit1;
     $('#unit1Text').textContent = state.unit1 ? '使用' : '不用';
@@ -2647,7 +2647,7 @@ ${answerMsg}
   function setGrade(g) {
     state.grade = g;
     store.set('grade', g);
-    $$('#gradeChips .chip').forEach((b) => b.classList.toggle('active', Number(b.dataset.grade) === g));
+    $('#gradeSelect').value = String(g);
     updateHint();
   }
 
@@ -2676,15 +2676,20 @@ ${answerMsg}
 
   /* ---------------- 示例题 ---------------- */
   function initExamples() {
-    const wrap = $('#examples');
-    MT.demo.examples.forEach((ex) => {
-      const b = el('button', { type: 'button', class: 'example', text: ex.label, title: ex.text });
-      b.addEventListener('click', () => {
-        $('#problem').value = ex.text;
-        setGrade(ex.grade);
-        $('#problem').focus();
-      });
-      wrap.appendChild(b);
+    const sel = $('#exampleSelect');
+    sel.appendChild(el('option', { value: '', text: '选一道示例题…' }));
+    MT.demo.examples.forEach((ex, i) => {
+      sel.appendChild(el('option', { value: String(i), text: `${ex.label} · ${ex.grade}年级` }));
+    });
+    sel.addEventListener('change', () => {
+      if (sel.value === '') return;
+      const ex = MT.demo.examples[Number(sel.value)];
+      if (!ex) return;
+      $('#problem').value = ex.text;
+      setGrade(ex.grade);
+      setCompact(false);
+      $('#problem').focus();
+      sel.value = '';
     });
   }
 
@@ -2693,6 +2698,7 @@ ${answerMsg}
     const ex = list[Math.floor(Math.random() * list.length)];
     $('#problem').value = ex.text;
     setGrade(ex.grade);
+    $('#exampleSelect').value = '';
     toast('换了一道：' + ex.label);
   }
 
@@ -3275,7 +3281,7 @@ ${answerMsg}
 
   /* ---------------- 启动 ---------------- */
   function init() {
-    if (!$('#gradeChips')) return; // 非主页面（如渲染预览页）直接跳过
+    if (!$('#gradeSelect')) return; // 非主页面（如渲染预览页）直接跳过
     initControls();
     initExamples();
     initSettings();
