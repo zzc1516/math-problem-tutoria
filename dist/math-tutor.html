@@ -236,7 +236,7 @@ button{font-family:inherit}
 .stage-col{display:flex;flex-direction:column;gap:12px;min-width:0;min-height:0}
 
 /* ---------------- 舞台 ---------------- */
-.stage{display:flex;flex-direction:column;flex:1 1 auto;min-height:460px;overflow:hidden}
+.stage{display:flex;flex-direction:column;flex:1 1 auto;min-height:600px;overflow:hidden}
 .stage-body{position:relative;flex:1;display:flex;min-height:0}
 .narration{
   position:absolute;left:18px;top:14px;z-index:3;max-width:min(440px,74%);
@@ -282,7 +282,7 @@ button{font-family:inherit}
     linear-gradient(90deg, rgba(45,156,219,.055) 1px, transparent 1px);
   background-size:26px 26px;
   background-position:center;
-  min-height:230px;
+  min-height:460px;
   display:flex;align-items:center;justify-content:center;
 }
 .svg-host > svg{position:absolute;inset:0;width:100%;height:100%;display:block;overflow:visible}
@@ -495,11 +495,11 @@ input[type=range]{width:100%;accent-color:var(--brand)}
 /* ---------------- SVG 图解通用 ---------------- */
 .dg{font-family:var(--font);user-select:none}
 .dg text{fill:#3B4A58}
-.dg .lbl{font-size:13px;font-weight:600}
-.dg .val{font-size:14px;font-weight:800;fill:#1F5E86}
-.dg .sm{font-size:11.5px;fill:#8A96A2}
-.dg .note{font-size:12px;fill:#6C7986}
-.dg .title{font-size:16px;font-weight:800;fill:#2B3644}
+.dg .lbl{font-size:14px;font-weight:600}
+.dg .val{font-size:15px;font-weight:800;fill:#1F5E86}
+.dg .sm{font-size:12px;fill:#8A96A2}
+.dg .note{font-size:12.5px;fill:#6C7986}
+.dg .title{font-size:17px;font-weight:800;fill:#2B3644}
 .dg .shape{transition:filter .3s ease, opacity .3s ease}
 .dg .el{transition:opacity .35s ease, filter .35s ease, transform .45s cubic-bezier(.4,0,.2,1);transform-box:fill-box}
 .dg .el.hidden{opacity:0 !important;pointer-events:none}
@@ -553,7 +553,7 @@ input[type=range]{width:100%;accent-color:var(--brand)}
 <!--
   数学图解讲解 · Math Tutor
   单文件版本，由 build.mjs 从 src/ 生成，请勿直接编辑本文件。
-  构建版本：61b87b5a
+  构建版本：19024929
   许可：MIT
 -->
 
@@ -2706,9 +2706,9 @@ ${answerMsg}
       { side: 'right', x: cx + 200, data: spec.right, color: C.orange }
     ].forEach(({ side, x, data, color }) => {
       const items = data.items || [];
-      const trayW = 250;
+      const trayW = 268;
       const sideY = beamY + 58;
-      const trayH = 42 + Math.max(1, items.length) * 46;
+      const trayH = 42 + Math.max(1, items.length) * 48;
       const g = s('g', { class: 'el' });
 
       // 吊绳 + 托盘
@@ -2722,18 +2722,18 @@ ${answerMsg}
       g._text = headT;
 
       // 物品：从上往下排，不再顶到横梁
-      let yy = sideY + 60;
+      let yy = sideY + 62;
       items.forEach((it, i) => {
         const txt = String(it.text || '');
-        const cw = Math.min(trayW - 20, Math.max(80, txt.length * 14 + 26));
+        const cw = Math.min(trayW - 16, Math.max(84, txt.length * 15 + 30));
         const ig = s('g', { class: 'el', 'data-id': it.id });
-        ig.appendChild(s('rect', { x: x - cw / 2, y: yy - 26, width: cw, height: 38, rx: 10, fill: i % 2 ? '#E9F5FD' : '#FFF0E9', stroke: i % 2 ? '#9FD0EC' : '#FFB894', 'stroke-width': 1.6 }));
-        const tx = s('text', { x, y: yy, class: 'lbl', 'text-anchor': 'middle', fill: '#2B4A63', 'font-size': 14 }, txt);
+        ig.appendChild(s('rect', { x: x - cw / 2, y: yy - 27, width: cw, height: 40, rx: 10, fill: i % 2 ? '#E9F5FD' : '#FFF0E9', stroke: i % 2 ? '#9FD0EC' : '#FFB894', 'stroke-width': 1.6 }));
+        const tx = s('text', { x, y: yy, class: 'lbl', 'text-anchor': 'middle', fill: '#2B4A63', 'font-size': 15 }, txt);
         ig.appendChild(tx);
         ig._text = tx;
         g.appendChild(ig);
         reg[it.id] = ig;
-        yy += 46;
+        yy += 48;
       });
 
       beamGroup.appendChild(g);
@@ -3088,7 +3088,7 @@ ${answerMsg}
       g.appendChild(s('text', { x: lx - 28, y: y - 6, class: 'lbl', 'text-anchor': 'end', fill: c.deep }, r.label || ''));
       g.appendChild(s('text', { x: lx - 28, y: y + 22, class: 'val', 'text-anchor': 'end', 'font-size': 17 }, r.value || ''));
 
-      const shareT = s('text', { x: rx + 20, y: y + 8, class: 'val', 'text-anchor': 'start', fill: c.deep, 'font-size': 17 }, r.share || '');
+      const shareT = s('text', { x: rx + 20, y: y + 8, class: 'val', 'text-anchor': 'start', fill: c.deep, 'font-size': 18 }, r.share || '');
       g.appendChild(shareT);
       g._text = shareT;
       svg.appendChild(g);

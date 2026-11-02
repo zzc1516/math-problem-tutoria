@@ -1872,9 +1872,9 @@ ${answerMsg}
       { side: 'right', x: cx + 200, data: spec.right, color: C.orange }
     ].forEach(({ side, x, data, color }) => {
       const items = data.items || [];
-      const trayW = 250;
+      const trayW = 268;
       const sideY = beamY + 58;
-      const trayH = 42 + Math.max(1, items.length) * 46;
+      const trayH = 42 + Math.max(1, items.length) * 48;
       const g = s('g', { class: 'el' });
 
       // 吊绳 + 托盘
@@ -1888,18 +1888,18 @@ ${answerMsg}
       g._text = headT;
 
       // 物品：从上往下排，不再顶到横梁
-      let yy = sideY + 60;
+      let yy = sideY + 62;
       items.forEach((it, i) => {
         const txt = String(it.text || '');
-        const cw = Math.min(trayW - 20, Math.max(80, txt.length * 14 + 26));
+        const cw = Math.min(trayW - 16, Math.max(84, txt.length * 15 + 30));
         const ig = s('g', { class: 'el', 'data-id': it.id });
-        ig.appendChild(s('rect', { x: x - cw / 2, y: yy - 26, width: cw, height: 38, rx: 10, fill: i % 2 ? '#E9F5FD' : '#FFF0E9', stroke: i % 2 ? '#9FD0EC' : '#FFB894', 'stroke-width': 1.6 }));
-        const tx = s('text', { x, y: yy, class: 'lbl', 'text-anchor': 'middle', fill: '#2B4A63', 'font-size': 14 }, txt);
+        ig.appendChild(s('rect', { x: x - cw / 2, y: yy - 27, width: cw, height: 40, rx: 10, fill: i % 2 ? '#E9F5FD' : '#FFF0E9', stroke: i % 2 ? '#9FD0EC' : '#FFB894', 'stroke-width': 1.6 }));
+        const tx = s('text', { x, y: yy, class: 'lbl', 'text-anchor': 'middle', fill: '#2B4A63', 'font-size': 15 }, txt);
         ig.appendChild(tx);
         ig._text = tx;
         g.appendChild(ig);
         reg[it.id] = ig;
-        yy += 46;
+        yy += 48;
       });
 
       beamGroup.appendChild(g);
@@ -2254,7 +2254,7 @@ ${answerMsg}
       g.appendChild(s('text', { x: lx - 28, y: y - 6, class: 'lbl', 'text-anchor': 'end', fill: c.deep }, r.label || ''));
       g.appendChild(s('text', { x: lx - 28, y: y + 22, class: 'val', 'text-anchor': 'end', 'font-size': 17 }, r.value || ''));
 
-      const shareT = s('text', { x: rx + 20, y: y + 8, class: 'val', 'text-anchor': 'start', fill: c.deep, 'font-size': 17 }, r.share || '');
+      const shareT = s('text', { x: rx + 20, y: y + 8, class: 'val', 'text-anchor': 'start', fill: c.deep, 'font-size': 18 }, r.share || '');
       g.appendChild(shareT);
       g._text = shareT;
       svg.appendChild(g);
