@@ -497,7 +497,7 @@ input[type=range]{width:100%;accent-color:var(--brand)}
 .loading-time{font-size:11px !important;color:var(--faint) !important;font-family:var(--mono)}
 
 /* ---------------- toast ---------------- */
-.toast-wrap{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:90;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
+.toast-wrap{position:fixed;left:50%;bottom:92px;transform:translateX(-50%);z-index:90;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
 .toast{
   background:#2B3644;color:#fff;font-size:13px;padding:9px 16px;border-radius:11px;
   box-shadow:0 12px 30px -10px rgba(0,0,0,.45);animation:toastIn .28s ease;
@@ -568,7 +568,7 @@ input[type=range]{width:100%;accent-color:var(--brand)}
 <!--
   数学图解讲解 · Math Tutor
   单文件版本，由 build.mjs 从 src/ 生成，请勿直接编辑本文件。
-  构建版本：016f9447
+  构建版本：3a6e194f
   许可：MIT
 -->
 
@@ -895,19 +895,20 @@ input[type=range]{width:100%;accent-color:var(--brand)}
     del(k) { try { localStorage.removeItem('mt.' + k); } catch (e) {} }
   };
 
-  let toastTimer = null;
   function toast(msg, kind, ms) {
     const wrap = $('#toastWrap');
     if (!wrap) return;
-    const t = el('div', { class: 'toast ' + (kind || '') , text: msg });
+    // 同一时刻只留一条：新提示直接替换旧的，避免越堆越多
+    while (wrap.firstChild) wrap.removeChild(wrap.firstChild);
+    const t = el('div', { class: 'toast ' + (kind || ''), text: msg });
     wrap.appendChild(t);
-    if (toastTimer) clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => {
-      t.style.transition = 'opacity .3s, transform .3s';
+    setTimeout(() => {
+      if (!t.parentNode) return;
+      t.style.transition = 'opacity .28s, transform .28s';
       t.style.opacity = '0';
       t.style.transform = 'translateY(8px)';
-      setTimeout(() => t.remove(), 320);
-    }, ms || 2600);
+      setTimeout(() => t.remove(), 300);
+    }, Math.max(1200, ms || 2400));
   }
 
   /** 把数字格式化成好看的中文表达：整数原样，小数最多两位 */

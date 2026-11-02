@@ -34,19 +34,20 @@
     del(k) { try { localStorage.removeItem('mt.' + k); } catch (e) {} }
   };
 
-  let toastTimer = null;
   function toast(msg, kind, ms) {
     const wrap = $('#toastWrap');
     if (!wrap) return;
-    const t = el('div', { class: 'toast ' + (kind || '') , text: msg });
+    // 同一时刻只留一条：新提示直接替换旧的，避免越堆越多
+    while (wrap.firstChild) wrap.removeChild(wrap.firstChild);
+    const t = el('div', { class: 'toast ' + (kind || ''), text: msg });
     wrap.appendChild(t);
-    if (toastTimer) clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => {
-      t.style.transition = 'opacity .3s, transform .3s';
+    setTimeout(() => {
+      if (!t.parentNode) return;
+      t.style.transition = 'opacity .28s, transform .28s';
       t.style.opacity = '0';
       t.style.transform = 'translateY(8px)';
-      setTimeout(() => t.remove(), 320);
-    }, ms || 2600);
+      setTimeout(() => t.remove(), 300);
+    }, Math.max(1200, ms || 2400));
   }
 
   /** 把数字格式化成好看的中文表达：整数原样，小数最多两位 */

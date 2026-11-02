@@ -489,7 +489,7 @@ input[type=range]{width:100%;accent-color:var(--brand)}
 .loading-time{font-size:11px !important;color:var(--faint) !important;font-family:var(--mono)}
 
 /* ---------------- toast ---------------- */
-.toast-wrap{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:90;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
+.toast-wrap{position:fixed;left:50%;bottom:92px;transform:translateX(-50%);z-index:90;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
 .toast{
   background:#2B3644;color:#fff;font-size:13px;padding:9px 16px;border-radius:11px;
   box-shadow:0 12px 30px -10px rgba(0,0,0,.45);animation:toastIn .28s ease;
