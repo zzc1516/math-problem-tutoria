@@ -198,10 +198,21 @@
       <h3 id="setTitle">连接你的大模型</h3>
       <button class="btn icon ghost" type="button" data-close aria-label="关闭">✕</button>
     </div>
-    <p class="modal-sub">
-      密钥只保存在这台电脑的浏览器里（localStorage），直接发往你选择的服务商，不经过任何中间服务器。
-      在公用电脑上用完请点「清除密钥」。
-    </p>
+    <div class="privacy-note">
+      <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="4" y="10.5" width="16" height="10.5" rx="2.5"/>
+        <path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/>
+        <circle cx="12" cy="15.6" r="1.4" fill="currentColor" stroke="none"/>
+      </svg>
+      <div>
+        <b>密钥只存在这台电脑上</b>
+        <span>
+          保存在你浏览器的 localStorage 里，<b>不会上传到任何服务器</b>，也不会写进代码或仓库。
+          请求从浏览器直连你选的服务商，我们看不到、也存不到你的 Key。
+          公用电脑用完请点左下「清除密钥」。
+        </span>
+      </div>
+    </div>
 
     <div class="field">
       <label for="provider">服务商</label>
@@ -215,11 +226,12 @@
     </div>
 
     <div class="field">
-      <label for="apiKey">API Key</label>
+      <label for="apiKey">API Key <span class="local-tag">仅存本地</span></label>
       <div class="input-eye">
         <input id="apiKey" type="password" spellcheck="false" autocomplete="off" placeholder="sk-..." />
         <button class="btn tiny ghost" type="button" id="btnEye">显示</button>
       </div>
+      <p class="field-note">只写进本机浏览器，换台电脑要重新填一次。</p>
     </div>
 
     <div class="field">
