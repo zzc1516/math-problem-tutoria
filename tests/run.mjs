@@ -146,5 +146,21 @@ ok('自定义服务商不会被误迁移', MT.llm.migrate({ provider: 'custom', 
 ok('每个服务商的视觉模型都在模型列表外独立存在',
   MT.llm.PRESETS.filter((p) => p.vision).every((p) => typeof p.vision === 'string'));
 
+/* ---------- 6. 思考模式 ---------- */
+group('思考模式 (thinking)');
+const thinkBody = (provider, lv) => {
+  const b = {};
+  const mode = MT.llm.thinkingModeOf(provider);
+  (MT.llm.THINK_MODES[mode] || MT.llm.THINK_MODES.none)(b, lv);
+  return b;
+};
+ok('DeepSeek 关闭思考 → thinking.disabled', thinkBody('deepseek', 'off').thinking.type === 'disabled');
+ok('DeepSeek 高强度 → reasoning_effort=high', thinkBody('deepseek', 'high').reasoning_effort === 'high');
+ok('DeepSeek 默认(auto)不额外传参', Object.keys(thinkBody('deepseek', 'auto')).length === 0);
+ok('通义用 enable_thinking', thinkBody('dashscope', 'off').enable_thinking === false);
+ok('OpenRouter 用 reasoning.effort', thinkBody('openrouter', 'low').reasoning.effort === 'low');
+ok('不支持的服务商不下发思考参数', Object.keys(thinkBody('moonshot', 'max')).length === 0);
+ok('配置默认 thinking=auto', MT.llm.DEFAULTS.thinking === 'auto');
+
 console.log(`\n结果：${pass} 通过，${fail} 失败\n`);
 process.exit(fail ? 1 : 0);

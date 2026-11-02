@@ -8,35 +8,41 @@
       id: 'deepseek', name: 'DeepSeek（推荐）', base: 'https://api.deepseek.com', model: 'deepseek-flash',
       models: ['deepseek-flash', 'deepseek-v4-pro'],
       vision: 'deepseek-flash', visionModels: ['deepseek-flash'],
-      note: '浏览器可直连，便宜、上下文长（1M），deepseek-flash 能看图；deepseek-v4-pro 不支持图片。'
+      think: 'deepseek',
+      note: 'deepseek-flash 能看图、支持思考模式（默认开启 high）；deepseek-v4-pro 不支持图片。'
     },
     {
       id: 'moonshot', name: 'Kimi 月之暗面', base: 'https://api.moonshot.cn/v1', model: 'moonshot-v1-8k',
-      models: ['moonshot-v1-8k', 'moonshot-v1-32k', 'kimi-k2-0711-preview'],
+      models: ['moonshot-v1-8k', 'moonshot-v1-32k'],
       vision: 'moonshot-v1-8k-vision-preview', visionModels: ['moonshot-v1-8k-vision-preview', 'moonshot-v1-32k-vision-preview'],
-      note: '浏览器可直连，长题友好，自带识图模型。'
+      think: 'none',
+      note: '长题友好，自带识图模型；思考能力由具体模型决定，不走参数开关。'
     },
     {
       id: 'dashscope', name: '阿里通义千问', base: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-plus',
       models: ['qwen-plus', 'qwen-max', 'qwen-turbo'],
       vision: 'qwen-vl-max', visionModels: ['qwen-vl-max', 'qwen-vl-plus'],
-      note: '浏览器可直连（阿里云百炼，兼容 OpenAI 协议），识图能力强。'
+      think: 'qwen',
+      note: '识图强；支持用 enable_thinking 开关思考（具体看所用模型）。'
     },
     {
       id: 'siliconflow', name: '硅基流动', base: 'https://api.siliconflow.cn/v1', model: 'Qwen/Qwen2.5-72B-Instruct',
-      models: ['Qwen/Qwen2.5-72B-Instruct', 'deepseek-ai/DeepSeek-V3', 'deepseek-ai/DeepSeek-R1'],
+      models: ['Qwen/Qwen2.5-72B-Instruct', 'deepseek-ai/DeepSeek-V3'],
       vision: 'Qwen/Qwen2.5-VL-72B-Instruct', visionModels: ['Qwen/Qwen2.5-VL-72B-Instruct', 'Qwen/Qwen2.5-VL-32B-Instruct'],
-      note: '浏览器可直连，模型多，自带视觉模型。'
+      think: 'none',
+      note: '模型多、有免费额度，自带视觉模型。'
     },
     {
       id: 'openrouter', name: 'OpenRouter', base: 'https://openrouter.ai/api/v1', model: 'deepseek/deepseek-chat',
-      models: ['deepseek/deepseek-chat', 'qwen/qwen-2.5-72b-instruct', 'anthropic/claude-3.5-sonnet'],
+      models: ['deepseek/deepseek-chat', 'qwen/qwen-2.5-72b-instruct'],
       vision: 'qwen/qwen-2.5-vl-72b-instruct', visionModels: ['qwen/qwen-2.5-vl-72b-instruct', 'google/gemini-2.0-flash-001'],
-      note: '浏览器可直连，可访问多家模型（需要外网）。'
+      think: 'openrouter',
+      note: '可访问多家模型（需要外网），思考强度用 reasoning.effort。'
     },
     {
       id: 'custom', name: '自定义（OpenAI 兼容）', base: '', model: '',
       models: [], vision: '', visionModels: [],
+      think: 'custom',
       note: '任何兼容 /chat/completions 的服务，例如本地 Ollama：http://localhost:11434/v1'
     }
   ];
@@ -48,8 +54,37 @@
     visionModel: '',
     apiKey: '',
     temperature: 0.2,
+    thinking: 'auto',
     jsonMode: true
   };
+
+  /* 思考模式：各家参数名不一样，按服务商适配 */
+  const THINK_MODES = {
+    deepseek(body, lv) {
+      if (lv === 'auto') return; // 跟随默认（DeepSeek 默认就是开启思考 · high）
+      if (lv === 'off') { body.thinking = { type: 'disabled' }; return; }
+      body.thinking = { type: 'enabled' };
+      body.reasoning_effort = lv;
+    },
+    qwen(body, lv) {
+      if (lv === 'auto') return;
+      body.enable_thinking = lv !== 'off';
+    },
+    openrouter(body, lv) {
+      if (lv === 'off') body.reasoning = { enabled: false };
+      else if (lv !== 'auto') body.reasoning = { effort: lv === 'max' ? 'high' : lv };
+    },
+    custom(body, lv) {
+      if (lv === 'auto' || lv === 'off') return;
+      body.reasoning_effort = lv;
+    },
+    none() {}
+  };
+
+  function thinkingModeOf(provider) {
+    const p = PRESETS.find((x) => x.id === provider);
+    return (p && p.think) || 'custom';
+  }
 
   /* 老模型名已经下线，旧配置读到就自动换到现行的名字 */
   const LEGACY_MODELS = {
@@ -83,6 +118,7 @@
       visionModel: cfg.visionModel || '',
       apiKey: cfg.apiKey,
       temperature: Number(cfg.temperature),
+      thinking: cfg.thinking || 'auto',
       jsonMode: !!cfg.jsonMode
     });
   }
@@ -142,9 +178,20 @@
     const body = {
       model: cfg.model,
       messages,
-      temperature: Number(cfg.temperature) >= 0 ? Number(cfg.temperature) : 0.2,
       stream: false
     };
+
+    // 思考模式：不同服务商参数不同
+    const level = cfg.thinking || 'auto';
+    const mode = thinkingModeOf(cfg.provider);
+    (THINK_MODES[mode] || THINK_MODES.none)(body, level);
+
+    // DeepSeek 在思考模式下会忽略 temperature，就别传了
+    const tempIgnored = mode === 'deepseek' && level !== 'off';
+    if (!tempIgnored) {
+      body.temperature = Number(cfg.temperature) >= 0 ? Number(cfg.temperature) : 0.2;
+    }
+
     if (cfg.jsonMode && opts.json !== false) body.response_format = { type: 'json_object' };
 
     const ctrl = new AbortController();
@@ -200,5 +247,30 @@
     return { ok: true, ms: Math.round(performance.now() - t0), text: String(text).slice(0, 40) };
   }
 
-  MT.llm = { PRESETS, DEFAULTS, getConfig, saveConfig, clearKey, isConfigured, chat, test, endpoint, visionModelOf, migrate };
+  /** 拉取服务商当前可用的模型名（比内置列表准，模型更新后不用等我们改代码） */
+  async function listModels(cfg) {
+    cfg = Object.assign({}, getConfig(), cfg || {});
+    if (!cfg.apiKey) throw new Error('还没有配置 API Key');
+    const base = String(cfg.baseUrl || '').trim().replace(/\/+$/, '').replace(/\/chat\/completions$/, '');
+    if (!base) throw new Error('还没有填写接口地址');
+    let res;
+    try {
+      res = await fetch(base + '/models', {
+        headers: { Authorization: 'Bearer ' + cfg.apiKey },
+        signal: typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(20000) : undefined
+      });
+    } catch (e) {
+      throw new Error('拉取失败：网络不通或该服务商不允许浏览器直接访问（CORS）');
+    }
+    if (!res.ok) throw new Error('拉取失败（HTTP ' + res.status + '），有的服务商不开放 /models 接口');
+    const data = await res.json();
+    const arr = (data && (data.data || data.models)) || [];
+    return arr.map((m) => m.id || m.name).filter(Boolean).slice(0, 80);
+  }
+
+  MT.llm = {
+    PRESETS, DEFAULTS, getConfig, saveConfig, clearKey, isConfigured,
+    chat, test, listModels, endpoint, visionModelOf, migrate,
+    thinkingModeOf, THINK_MODES
+  };
 })();

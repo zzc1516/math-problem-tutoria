@@ -222,8 +222,12 @@
 
     <div class="field">
       <label for="model">模型</label>
-      <input id="model" type="text" spellcheck="false" placeholder="deepseek-chat" />
+      <input id="model" type="text" spellcheck="false" placeholder="deepseek-flash" />
       <div class="chips small" id="modelChips"></div>
+      <div class="row-inline">
+        <button class="btn tiny ghost" type="button" id="btnModels">拉取服务商模型列表</button>
+        <span class="field-note" id="modelListNote"></span>
+      </div>
     </div>
 
     <div class="field">
@@ -235,6 +239,17 @@
 
     <details class="advanced">
       <summary>高级选项</summary>
+      <div class="field">
+        <label for="thinking">思考模式</label>
+        <select id="thinking">
+          <option value="auto">跟随服务商默认（DeepSeek 默认开启 · high）</option>
+          <option value="off">关闭思考 · 更快</option>
+          <option value="low">开启 · 低强度</option>
+          <option value="high">开启 · 高强度（推荐）</option>
+          <option value="max">开启 · 最高强度（难题）</option>
+        </select>
+        <p class="field-note">思考模式下模型先推理再作答，复杂应用题更稳但更慢；开启时 temperature 不生效。</p>
+      </div>
       <div class="field">
         <label for="temperature">随机性 temperature：<b id="tempVal">0.2</b></label>
         <input id="temperature" type="range" min="0" max="1" step="0.1" value="0.2" />

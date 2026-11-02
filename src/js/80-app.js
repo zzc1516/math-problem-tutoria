@@ -519,6 +519,7 @@
     $('#temperature').value = cfg.temperature;
     $('#tempVal').textContent = cfg.temperature;
     $('#jsonMode').checked = cfg.jsonMode;
+    $('#thinking').value = cfg.thinking || 'auto';
     const preset = MT.llm.PRESETS.find((x) => x.id === cfg.provider) || MT.llm.PRESETS[0];
     $('#visionModel').value = cfg.visionModel || preset.vision || '';
     $('#providerNote').textContent = preset.note;
@@ -554,6 +555,7 @@
       visionModel: $('#visionModel').value.trim(),
       apiKey: $('#apiKey').value.trim(),
       temperature: Number($('#temperature').value),
+      thinking: $('#thinking').value,
       jsonMode: $('#jsonMode').checked
     };
   }
@@ -607,6 +609,31 @@
       } catch (e) {
         box.textContent = String(e.message || e).slice(0, 60);
         box.className = 'test-result bad';
+      }
+    });
+
+    // 直接问服务商要当前可用的模型名，避免内置列表过期
+    $('#btnModels').addEventListener('click', async () => {
+      const note = $('#modelListNote');
+      const cfg = readForm();
+      if (!cfg.apiKey) { note.textContent = '先填 API Key'; note.className = 'field-note bad'; return; }
+      note.textContent = '拉取中…';
+      note.className = 'field-note';
+      try {
+        const list = await MT.llm.listModels(cfg);
+        if (!list.length) throw new Error('服务商没有返回模型');
+        const chips = $('#modelChips');
+        chips.innerHTML = '';
+        list.forEach((m) => {
+          const c = el('button', { type: 'button', class: 'chip', text: m });
+          c.addEventListener('click', () => { $('#model').value = m; });
+          chips.appendChild(c);
+        });
+        note.textContent = `已拉取 ${list.length} 个模型，点一下就能选`;
+        note.className = 'field-note ok';
+      } catch (e) {
+        note.textContent = String(e.message || e).slice(0, 50);
+        note.className = 'field-note bad';
       }
     });
     document.addEventListener('keydown', (e) => {
@@ -685,6 +712,8 @@
       openSettings();
       const card = $('.modal-card');
       if (card) card.style.animation = 'none';
+      const adv = $('.advanced');
+      if (adv) adv.setAttribute('open', '');
     }
     if (location.hash === '#shot') {
       const fake = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
