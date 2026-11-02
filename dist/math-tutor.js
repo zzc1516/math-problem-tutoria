@@ -1212,10 +1212,10 @@ text 里不要用 Markdown，不要超过 90 个字。`;
 
   const PRESETS = [
     {
-      id: 'deepseek', name: 'DeepSeek（推荐）', base: 'https://api.deepseek.com', model: 'deepseek-chat',
-      models: ['deepseek-chat', 'deepseek-reasoner'],
-      vision: '', visionModels: [],
-      note: '浏览器可直连，中文数学讲解稳定，价格便宜。但它看不了图片——拍图讲解请把服务商换成通义千问、硅基流动或 Kimi。'
+      id: 'deepseek', name: 'DeepSeek（推荐）', base: 'https://api.deepseek.com', model: 'deepseek-flash',
+      models: ['deepseek-flash', 'deepseek-v4-pro'],
+      vision: 'deepseek-flash', visionModels: ['deepseek-flash'],
+      note: '浏览器可直连，便宜、上下文长（1M），deepseek-flash 能看图；deepseek-v4-pro 不支持图片。'
     },
     {
       id: 'moonshot', name: 'Kimi 月之暗面', base: 'https://api.moonshot.cn/v1', model: 'moonshot-v1-8k',
@@ -1251,18 +1251,35 @@ text 里不要用 Markdown，不要超过 90 个字。`;
   const DEFAULTS = {
     provider: 'deepseek',
     baseUrl: 'https://api.deepseek.com',
-    model: 'deepseek-chat',
+    model: 'deepseek-flash',
     visionModel: '',
     apiKey: '',
     temperature: 0.2,
     jsonMode: true
   };
 
+  /* 老模型名已经下线，旧配置读到就自动换到现行的名字 */
+  const LEGACY_MODELS = {
+    'deepseek-chat': 'deepseek-flash',
+    'deepseek-reasoner': 'deepseek-flash',
+    'deepseek-v4-flash': 'deepseek-flash',
+    'deepseek-v4-flash-vision-exp': 'deepseek-flash'
+  };
+
+  function migrate(cfg) {
+    if (cfg.provider === 'deepseek') {
+      const m = LEGACY_MODELS[cfg.model];
+      if (m) cfg.model = m;
+      if (cfg.visionModel && LEGACY_MODELS[cfg.visionModel]) cfg.visionModel = LEGACY_MODELS[cfg.visionModel];
+    }
+    return cfg;
+  }
+
   const LS_KEY = 'config';
 
   function getConfig() {
     const saved = U.store.get(LS_KEY, null);
-    return Object.assign({}, DEFAULTS, saved || {});
+    return migrate(Object.assign({}, DEFAULTS, saved || {}));
   }
 
   function saveConfig(cfg) {
@@ -1300,7 +1317,7 @@ text 里不要用 Markdown，不要超过 90 个字。`;
   function visionModelOf(cfg) {
     cfg = cfg || getConfig();
     if (cfg.visionModel) return cfg.visionModel;
-    if (/vl|vision|glm-4v|-4o|claude-3|gemini|internvl|pixtral/i.test(cfg.model || '')) return cfg.model;
+    if (/deepseek-flash|vl|vision|glm-4v|-4o|claude-3|gemini|internvl|pixtral/i.test(cfg.model || '')) return cfg.model;
     return '';
   }
 
@@ -1390,7 +1407,7 @@ text 里不要用 Markdown，不要超过 90 个字。`;
     return { ok: true, ms: Math.round(performance.now() - t0), text: String(text).slice(0, 40) };
   }
 
-  MT.llm = { PRESETS, DEFAULTS, getConfig, saveConfig, clearKey, isConfigured, chat, test, endpoint, visionModelOf };
+  MT.llm = { PRESETS, DEFAULTS, getConfig, saveConfig, clearKey, isConfigured, chat, test, endpoint, visionModelOf, migrate };
 })();
 
 
@@ -2954,8 +2971,8 @@ ${answerMsg}
     $('#temperature').value = cfg.temperature;
     $('#tempVal').textContent = cfg.temperature;
     $('#jsonMode').checked = cfg.jsonMode;
-    $('#visionModel').value = cfg.visionModel || '';
     const preset = MT.llm.PRESETS.find((x) => x.id === cfg.provider) || MT.llm.PRESETS[0];
+    $('#visionModel').value = cfg.visionModel || preset.vision || '';
     $('#providerNote').textContent = preset.note;
     const chips = $('#modelChips');
     chips.innerHTML = '';
@@ -3116,11 +3133,11 @@ ${answerMsg}
     }
 
     // 调试/演示用锚点
-    if (location.hash === '#settings') setTimeout(() => {
+    if (location.hash === '#settings') {
       openSettings();
       const card = $('.modal-card');
       if (card) card.style.animation = 'none';
-    }, 120);
+    }
     if (location.hash === '#shot') {
       const fake = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
         `<svg xmlns="http://www.w3.org/2000/svg" width="520" height="300"><rect width="520" height="300" fill="#fff"/>

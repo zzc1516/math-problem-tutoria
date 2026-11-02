@@ -519,8 +519,8 @@
     $('#temperature').value = cfg.temperature;
     $('#tempVal').textContent = cfg.temperature;
     $('#jsonMode').checked = cfg.jsonMode;
-    $('#visionModel').value = cfg.visionModel || '';
     const preset = MT.llm.PRESETS.find((x) => x.id === cfg.provider) || MT.llm.PRESETS[0];
+    $('#visionModel').value = cfg.visionModel || preset.vision || '';
     $('#providerNote').textContent = preset.note;
     const chips = $('#modelChips');
     chips.innerHTML = '';
@@ -681,11 +681,11 @@
     }
 
     // 调试/演示用锚点
-    if (location.hash === '#settings') setTimeout(() => {
+    if (location.hash === '#settings') {
       openSettings();
       const card = $('.modal-card');
       if (card) card.style.animation = 'none';
-    }, 120);
+    }
     if (location.hash === '#shot') {
       const fake = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
         `<svg xmlns="http://www.w3.org/2000/svg" width="520" height="300"><rect width="520" height="300" fill="#fff"/>

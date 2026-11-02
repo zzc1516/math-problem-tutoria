@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
-const files = ['00-util.js', '10-frac.js', '20-expr.js', '30-schema.js', '40-prompt.js', '45-demo.js'];
+const files = ['00-util.js', '10-frac.js', '20-expr.js', '30-schema.js', '40-prompt.js', '45-demo.js', '50-llm.js'];
 
 const sandbox = {
   window: {},
@@ -133,6 +133,18 @@ ok('带图时提示词要求先读图',
   MT.prompt.buildUserPrompt({ problem: '', grade: 4, method: 'arithmetic', unit1: false, hasImage: true }).includes('题目以图片给出'));
 ok('不带图时不出现读图要求',
   !MT.prompt.buildUserPrompt({ problem: '1+1', grade: 1, method: 'arithmetic', unit1: false }).includes('题目以图片给出'));
+
+/* ---------- 5. 服务商预设 ---------- */
+group('服务商预设 (llm)');
+const deepseek = MT.llm.PRESETS.find((p) => p.id === 'deepseek');
+ok('DeepSeek 默认模型是 deepseek-flash', MT.llm.DEFAULTS.model === 'deepseek-flash', MT.llm.DEFAULTS.model);
+ok('DeepSeek 预设带视觉模型', !!(deepseek && deepseek.vision), '缺 vision');
+ok('DeepSeek 默认就能读图', MT.llm.visionModelOf({ provider: 'deepseek', model: 'deepseek-flash', visionModel: '' }) === 'deepseek-flash');
+ok('deepseek-v4-pro 不冒充视觉模型', MT.llm.visionModelOf({ provider: 'deepseek', model: 'deepseek-v4-pro', visionModel: '' }) === '');
+ok('旧模型名自动迁移', MT.llm.migrate({ provider: 'deepseek', model: 'deepseek-chat' }).model === 'deepseek-flash');
+ok('自定义服务商不会被误迁移', MT.llm.migrate({ provider: 'custom', model: 'deepseek-chat' }).model === 'deepseek-chat');
+ok('每个服务商的视觉模型都在模型列表外独立存在',
+  MT.llm.PRESETS.filter((p) => p.vision).every((p) => typeof p.vision === 'string'));
 
 console.log(`\n结果：${pass} 通过，${fail} 失败\n`);
 process.exit(fail ? 1 : 0);
