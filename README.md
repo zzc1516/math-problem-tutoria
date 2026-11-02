@@ -2,6 +2,8 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-ff6b35.svg)](LICENSE)
 
+**在线试用**：<https://zzc1516.github.io/math-problem-tutoria/dist/math-tutor.html>
+
 给家长用的小学数学讲解器：**贴一道题（或拍张照片），它就画一张会动的图，再顺着图一步步讲给你和孩子听。**
 
 - 一道题 = 一张图 + 3–6 步讲解，每步都和图上的动作对得上
@@ -17,35 +19,39 @@
 
 ## 1. 快速开始
 
+**在线版（推荐先试）**：<https://zzc1516.github.io/math-problem-tutoria/dist/math-tutor.html>
+
+本地版：
+
 1. 双击 `dist/math-tutor.html`（推荐用 Edge / Chrome）
 2. 点右上角 **设置** → 选服务商 → 粘贴 API Key → **保存**
 3. 在输入框贴题目，或点 **拍照识题** 传一张照片
 4. 选好年级/解法/单位 1，点 **开始讲解**
 
-不想配 Key 也可以先点 **看示例** —— 内置 3 节完整讲解（分数、折扣盈亏、浓度），不需要联网。
+不想配 Key 也可以先点 **看示例** —— 内置 4 节完整讲解（分数、折扣盈亏、浓度、简易方程），不需要联网。
 
-### 想发到网上给别人用？
+> 在线版和本地版是同一份文件；**API Key 只存在各自浏览器里**，不会因为打开公开网址而泄露，也不用你替访客付调用费用。
 
-**Gitee Pages 已经停止服务**：`*.gitee.io` 域名还能解析，但所有站点（包括 layui、hutool 这些老牌项目）都已 404。
-Gitee 现在只做代码托管，仓库「服务」菜单里如果没有 Pages，就是确实没有了。
+### 想自己部署一份？
 
-替代方案（都免费、都带 HTTPS）：
+现在已经部署在 GitHub Pages：
+<https://zzc1516.github.io/math-problem-tutoria/dist/math-tutor.html>
 
-1. 先构建出可部署目录：
+**Gitee Pages 已经停止服务**：`*.gitee.io` 域名还能解析，但所有站点（包括 layui、hutool 这些老牌项目）都已 404，Gitee 现在只做代码托管。
 
-   ```bash
-   node build.mjs        # 生成 site/index.html（整份应用，单文件）
-   ```
+要换地方托管，先构建出可部署目录：
 
-2. 三选一发布：
+```bash
+node build.mjs        # 生成 site/index.html 与 dist/math-tutor.html
+```
 
-   | 方式 | 操作 | 结果 |
-   |---|---|---|
-   | **Netlify Drop** | 打开 <https://app.netlify.com/drop>，把 `site` 文件夹拖进去 | 几秒后拿到 `xxx.netlify.app` |
-   | **Cloudflare Pages** | Workers & Pages → 创建 → 直接上传 `site` 文件夹 | `xxx.pages.dev` |
-   | **GitHub Pages** | 把仓库镜像到 GitHub → Settings → Pages → 选分支根目录 | `xxx.github.io/repo` |
+然后三选一：
 
-发布后所有访问者用的是同一个网页，但 **API Key 各配各的**（存在各自浏览器 localStorage 里），互不影响，你也不承担别人的调用费用。
+| 方式 | 操作 | 结果 |
+|---|---|---|
+| **GitHub Pages** | 推送到 GitHub → Settings → Pages → 选分支根目录 | `用户名.github.io/仓库名/...` |
+| **Netlify Drop** | 打开 <https://app.netlify.com/drop>，把 `site` 文件夹拖进去 | 几秒后拿到 `xxx.netlify.app` |
+| **Cloudflare Pages** | Workers & Pages → 创建 → 直接上传 `site` 文件夹 | `xxx.pages.dev` |
 
 > 单文件还有个更省事的用法：直接把 `dist/math-tutor.html` 发给对方，双击就能用，连托管都不需要。
 

@@ -553,7 +553,7 @@ input[type=range]{width:100%;accent-color:var(--brand)}
 <!--
   数学图解讲解 · Math Tutor
   单文件版本，由 build.mjs 从 src/ 生成，请勿直接编辑本文件。
-  构建版本：19024929
+  构建版本：09ef153b
   许可：MIT
 -->
 
@@ -2685,7 +2685,7 @@ ${answerMsg}
   function renderBalance(spec, reg) {
     const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'dg' });
     title(svg, spec.title || '天平');
-    const cx = W / 2, beamY = 172;
+    const cx = W / 2, beamY = 156;
 
     const beamGroup = s('g', { class: 'el', 'data-id': 'beam' });
     reg.beam = beamGroup;
@@ -2694,12 +2694,12 @@ ${answerMsg}
       beamGroup.setAttribute('transform', `rotate(${deg} ${cx} ${beamY})`);
     };
 
-    // 横梁 + 支点
+    // 横梁 + 支点（支架压短，给托盘留高度）
     beamGroup.appendChild(s('rect', { x: cx - 250, y: beamY - 7, width: 500, height: 14, rx: 7, fill: '#F0B23C' }));
     beamGroup.appendChild(s('circle', { cx, cy: beamY, r: 13, fill: '#D98F1C' }));
-    beamGroup.appendChild(s('path', { d: `M${cx} ${beamY + 10} L${cx} ${beamY + 196}`, stroke: '#C08A22', 'stroke-width': 9, 'stroke-linecap': 'round' }));
-    beamGroup.appendChild(s('path', { d: `M${cx - 62} ${beamY + 250} L${cx + 62} ${beamY + 250} L${cx} ${beamY + 196} Z`, fill: '#F6C765', stroke: '#D98F1C', 'stroke-width': 2, 'stroke-linejoin': 'round' }));
-    beamGroup.appendChild(s('rect', { x: cx - 88, y: beamY + 248, width: 176, height: 13, rx: 6, fill: '#E8B24A' }));
+    beamGroup.appendChild(s('path', { d: `M${cx} ${beamY + 10} L${cx} ${beamY + 150}`, stroke: '#C08A22', 'stroke-width': 9, 'stroke-linecap': 'round' }));
+    beamGroup.appendChild(s('path', { d: `M${cx - 62} ${beamY + 196} L${cx + 62} ${beamY + 196} L${cx} ${beamY + 150} Z`, fill: '#F6C765', stroke: '#D98F1C', 'stroke-width': 2, 'stroke-linejoin': 'round' }));
+    beamGroup.appendChild(s('rect', { x: cx - 88, y: beamY + 194, width: 176, height: 13, rx: 6, fill: '#E8B24A' }));
 
     [
       { side: 'left', x: cx - 200, data: spec.left, color: C.blue },
@@ -2743,8 +2743,8 @@ ${answerMsg}
     svg.appendChild(beamGroup);
 
     if (spec.hint) {
-      svg.appendChild(pill(cx - 150, 470, 300, 34, '#F4FBF7', '#BDE3CE'));
-      svg.appendChild(text(cx, 493, spec.hint, 'note', { fill: '#2C7A54' }));
+      svg.appendChild(pill(cx - 150, 452, 300, 34, '#F4FBF7', '#BDE3CE'));
+      svg.appendChild(text(cx, 475, spec.hint, 'note', { fill: '#2C7A54' }));
     }
     return svg;
   }
@@ -3176,16 +3176,31 @@ ${answerMsg}
     return { svg, reg };
   }
 
-  /** 把 viewBox 收缩到内容真实范围：留白越少，同样舞台里字就越大 */
-  function fit(svg, pad) {
-    pad = pad == null ? 26 : pad;
+  /**
+   * 把 viewBox 收缩到内容真实范围——但**只缩不放**。
+   * 放大会让每张图的字号各不相同（这图 1.4 倍、那图 1 倍），
+   * 所以放大倍数固定为 1：内容放得下就按原尺寸画，放不下才等比缩小。
+   */
+  function fit(svg, pad, maxScale) {
+    pad = pad == null ? 30 : pad;
+    maxScale = maxScale == null ? 1 : maxScale;
     let bb;
     try { bb = svg.getBBox(); } catch (e) { return null; }
     if (!bb || bb.width < 20 || bb.height < 20) return null;
-    const w = bb.width + pad * 2;
-    const h = bb.height + pad * 2;
-    svg.setAttribute('viewBox', `${bb.x - pad} ${bb.y - pad} ${w} ${h}`);
-    return { w, h };
+
+    let vw = bb.width + pad * 2;
+    let vh = bb.height + pad * 2;
+
+    const rect = svg.getBoundingClientRect ? svg.getBoundingClientRect() : null;
+    if (rect && rect.width > 40 && rect.height > 40) {
+      vw = Math.max(vw, rect.width / maxScale);
+      vh = Math.max(vh, rect.height / maxScale);
+    }
+
+    const cx = bb.x + bb.width / 2;
+    const cy = bb.y + bb.height / 2;
+    svg.setAttribute('viewBox', `${cx - vw / 2} ${cy - vh / 2} ${vw} ${vh}`);
+    return { w: vw, h: vh };
   }
 
   MT.diagrams = { render, fit, COLORS: C, W, H };
@@ -3231,8 +3246,9 @@ ${answerMsg}
       const { svg, reg } = MT.diagrams.render(sp);
       this.handle = { svg, reg };
       this.host.appendChild(svg);
-      // 进 DOM 之后量一次实际内容范围，再据此收紧 viewBox
-      if (MT.diagrams.fit) MT.diagrams.fit(svg, 20);
+      // 进 DOM 之后量一次实际内容范围，据此收紧 viewBox（放大上限 1.2 倍）
+      // 只缩不放：所有图的字号保持一致，不被窗口大小和图形内容牵着走
+      if (MT.diagrams.fit) MT.diagrams.fit(svg, 30, 1);
       if (swap) svg.classList.add('swap-in');
       this.svg = svg;
       this.index = -1;
@@ -3391,7 +3407,8 @@ ${answerMsg}
       let bb;
       try { bb = el.getBBox(); } catch (e) { return; }
       const w = Math.max(28, str.length * 13 + 18);
-      const x = Math.min(MT.diagrams.W - w - 6, bb.x + bb.width - 4);
+      // 贴在图元右端内侧，避免超出画布被裁掉
+      const x = Math.max(6, Math.min(MT.diagrams.W - w - 6, bb.x + bb.width - w));
       const y = Math.max(4, bb.y - 16);
       const g = svgNode('g', { class: 'mark-in' });
       g.appendChild(svgNode('rect', { x, y, width: w, height: 26, rx: 13, fill: '#2FA36B' }));

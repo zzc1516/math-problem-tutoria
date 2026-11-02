@@ -36,8 +36,9 @@
       const { svg, reg } = MT.diagrams.render(sp);
       this.handle = { svg, reg };
       this.host.appendChild(svg);
-      // 进 DOM 之后量一次实际内容范围，再据此收紧 viewBox
-      if (MT.diagrams.fit) MT.diagrams.fit(svg, 20);
+      // 进 DOM 之后量一次实际内容范围，据此收紧 viewBox（放大上限 1.2 倍）
+      // 只缩不放：所有图的字号保持一致，不被窗口大小和图形内容牵着走
+      if (MT.diagrams.fit) MT.diagrams.fit(svg, 30, 1);
       if (swap) svg.classList.add('swap-in');
       this.svg = svg;
       this.index = -1;
@@ -196,7 +197,8 @@
       let bb;
       try { bb = el.getBBox(); } catch (e) { return; }
       const w = Math.max(28, str.length * 13 + 18);
-      const x = Math.min(MT.diagrams.W - w - 6, bb.x + bb.width - 4);
+      // 贴在图元右端内侧，避免超出画布被裁掉
+      const x = Math.max(6, Math.min(MT.diagrams.W - w - 6, bb.x + bb.width - w));
       const y = Math.max(4, bb.y - 16);
       const g = svgNode('g', { class: 'mark-in' });
       g.appendChild(svgNode('rect', { x, y, width: w, height: 26, rx: 13, fill: '#2FA36B' }));

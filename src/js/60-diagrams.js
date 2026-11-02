@@ -169,7 +169,7 @@
   function renderBalance(spec, reg) {
     const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'dg' });
     title(svg, spec.title || '天平');
-    const cx = W / 2, beamY = 172;
+    const cx = W / 2, beamY = 156;
 
     const beamGroup = s('g', { class: 'el', 'data-id': 'beam' });
     reg.beam = beamGroup;
@@ -178,12 +178,12 @@
       beamGroup.setAttribute('transform', `rotate(${deg} ${cx} ${beamY})`);
     };
 
-    // 横梁 + 支点
+    // 横梁 + 支点（支架压短，给托盘留高度）
     beamGroup.appendChild(s('rect', { x: cx - 250, y: beamY - 7, width: 500, height: 14, rx: 7, fill: '#F0B23C' }));
     beamGroup.appendChild(s('circle', { cx, cy: beamY, r: 13, fill: '#D98F1C' }));
-    beamGroup.appendChild(s('path', { d: `M${cx} ${beamY + 10} L${cx} ${beamY + 196}`, stroke: '#C08A22', 'stroke-width': 9, 'stroke-linecap': 'round' }));
-    beamGroup.appendChild(s('path', { d: `M${cx - 62} ${beamY + 250} L${cx + 62} ${beamY + 250} L${cx} ${beamY + 196} Z`, fill: '#F6C765', stroke: '#D98F1C', 'stroke-width': 2, 'stroke-linejoin': 'round' }));
-    beamGroup.appendChild(s('rect', { x: cx - 88, y: beamY + 248, width: 176, height: 13, rx: 6, fill: '#E8B24A' }));
+    beamGroup.appendChild(s('path', { d: `M${cx} ${beamY + 10} L${cx} ${beamY + 150}`, stroke: '#C08A22', 'stroke-width': 9, 'stroke-linecap': 'round' }));
+    beamGroup.appendChild(s('path', { d: `M${cx - 62} ${beamY + 196} L${cx + 62} ${beamY + 196} L${cx} ${beamY + 150} Z`, fill: '#F6C765', stroke: '#D98F1C', 'stroke-width': 2, 'stroke-linejoin': 'round' }));
+    beamGroup.appendChild(s('rect', { x: cx - 88, y: beamY + 194, width: 176, height: 13, rx: 6, fill: '#E8B24A' }));
 
     [
       { side: 'left', x: cx - 200, data: spec.left, color: C.blue },
@@ -227,8 +227,8 @@
     svg.appendChild(beamGroup);
 
     if (spec.hint) {
-      svg.appendChild(pill(cx - 150, 470, 300, 34, '#F4FBF7', '#BDE3CE'));
-      svg.appendChild(text(cx, 493, spec.hint, 'note', { fill: '#2C7A54' }));
+      svg.appendChild(pill(cx - 150, 452, 300, 34, '#F4FBF7', '#BDE3CE'));
+      svg.appendChild(text(cx, 475, spec.hint, 'note', { fill: '#2C7A54' }));
     }
     return svg;
   }
@@ -660,16 +660,31 @@
     return { svg, reg };
   }
 
-  /** 把 viewBox 收缩到内容真实范围：留白越少，同样舞台里字就越大 */
-  function fit(svg, pad) {
-    pad = pad == null ? 26 : pad;
+  /**
+   * 把 viewBox 收缩到内容真实范围——但**只缩不放**。
+   * 放大会让每张图的字号各不相同（这图 1.4 倍、那图 1 倍），
+   * 所以放大倍数固定为 1：内容放得下就按原尺寸画，放不下才等比缩小。
+   */
+  function fit(svg, pad, maxScale) {
+    pad = pad == null ? 30 : pad;
+    maxScale = maxScale == null ? 1 : maxScale;
     let bb;
     try { bb = svg.getBBox(); } catch (e) { return null; }
     if (!bb || bb.width < 20 || bb.height < 20) return null;
-    const w = bb.width + pad * 2;
-    const h = bb.height + pad * 2;
-    svg.setAttribute('viewBox', `${bb.x - pad} ${bb.y - pad} ${w} ${h}`);
-    return { w, h };
+
+    let vw = bb.width + pad * 2;
+    let vh = bb.height + pad * 2;
+
+    const rect = svg.getBoundingClientRect ? svg.getBoundingClientRect() : null;
+    if (rect && rect.width > 40 && rect.height > 40) {
+      vw = Math.max(vw, rect.width / maxScale);
+      vh = Math.max(vh, rect.height / maxScale);
+    }
+
+    const cx = bb.x + bb.width / 2;
+    const cy = bb.y + bb.height / 2;
+    svg.setAttribute('viewBox', `${cx - vw / 2} ${cy - vh / 2} ${vw} ${vh}`);
+    return { w: vw, h: vh };
   }
 
   MT.diagrams = { render, fit, COLORS: C, W, H };
