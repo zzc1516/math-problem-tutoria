@@ -2829,12 +2829,7 @@ ${answerMsg}
     sel.addEventListener('change', () => setGrade(Number(sel.value)));
 
     $$('#methodChips .chip').forEach((b) => b.addEventListener('click', () => setMethod(b.dataset.method)));
-    $('#unit1').addEventListener('change', (e) => {
-      state.unit1 = e.target.checked;
-      store.set('unit1', state.unit1);
-      $('#unit1Text').textContent = state.unit1 ? '使用' : '不用';
-      updateHint();
-    });
+    $('#unit1').addEventListener('change', (e) => setUnit1(e.target.checked));
     syncControls();
   }
 
@@ -2857,6 +2852,14 @@ ${answerMsg}
     state.method = m;
     store.set('method', m);
     $$('#methodChips .chip').forEach((b) => b.classList.toggle('active', b.dataset.method === m));
+    updateHint();
+  }
+
+  function setUnit1(on) {
+    state.unit1 = !!on;
+    store.set('unit1', state.unit1);
+    $('#unit1').checked = state.unit1;
+    $('#unit1Text').textContent = state.unit1 ? '使用' : '不用';
     updateHint();
   }
 
@@ -3183,6 +3186,13 @@ ${answerMsg}
 
     const out = MT.schema.normalize(list[demoIndex]);
     const v = MT.schema.verify(out.script);
+
+    // 把示例题写回输入区，并同步三个开关，避免"下面讲的和上面写的不是一道题"
+    if (out.script.problem.text) $('#problem').value = out.script.problem.text;
+    setGrade(out.script.meta.grade);
+    setMethod(out.script.meta.method);
+    setUnit1(out.script.meta.unit1);
+
     render({ script: out.script, warnings: out.warnings, verify: v, ms: 0, calls: 0 });
     if (advance || force != null) {
       toast(`内置示例 ${demoIndex + 1}/${list.length}：${out.script.meta.topic || ''}（不需要 Key）`);
