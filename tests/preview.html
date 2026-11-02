@@ -92,6 +92,7 @@ samples.forEach(([cap, spec]) => {
   cell.innerHTML = '<div class="cap">' + cap + '</div>';
   const { svg } = MT.diagrams.render(MT.schema.normalize({ meta:{}, problem:{}, diagram: spec, steps:[{title:'x'}], answer:{} }).script.diagram);
   cell.appendChild(svg);
+  MT.diagrams.fit(svg, 18);
   grid.appendChild(cell);
 });
 </script>

@@ -185,6 +185,11 @@
     }
   }
 
+  function setCompact(on) {
+    const ask = $('.ask');
+    if (ask) ask.classList.toggle('compact', !!on);
+  }
+
   /* ---------------- 渲染一节课 ---------------- */
   function render(res) {
     const script = res.script;
@@ -246,6 +251,7 @@
     $('#btnRethink').hidden = false;
 
     state.player.goto(0, true);
+    setCompact(true);
   }
 
   function renderSteps(script, verify) {
@@ -675,15 +681,17 @@
     updateHint();
 
     $('#btnSolve').addEventListener('click', () => solve());
+    $('#problem').addEventListener('focus', () => setCompact(false));
     $('#problem').addEventListener('keydown', (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') solve();
     });
     $('#btnClear').addEventListener('click', () => {
       $('#problem').value = '';
       clearShot();
+      setCompact(false);
       $('#problem').focus();
     });
-    $('#btnRandom').addEventListener('click', randomExample);
+    $('#btnRandom').addEventListener('click', () => { setCompact(false); randomExample(); });
     $('#btnRethink').addEventListener('click', () => {
       solve({ nudge: '换一种更直观的讲解顺序，多用图上的动作，少讲抽象的话。' });
     });

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>fit 量测</title>
+<link rel="stylesheet" href="../src/styles.css" />
+<style>
+  html,body{height:auto;background:#fff}
+  body{padding:20px;font-family:monospace}
+  #host{width:840px;height:390px;position:relative;border:1px solid #ddd;margin-bottom:12px}
+  #host svg{position:absolute;inset:0;width:100%;height:100%}
+  #log{font-size:15px;line-height:1.9;white-space:pre-wrap}
+</style>
+</head>
+<body>
+<div id="host"></div>
+<div id="log">测量中…</div>
+<script src="../dist/math-tutor.js"></script>
+<script>
+  const spec = MT.schema.normalize({
+    meta: {}, problem: {}, steps: [{ title: 'x' }], answer: {},
+    diagram: {
+      type: 'percentbar', title: '乙容器里的溶液', note: '水从头到尾都是 18 kg',
+      rows: [{
+        id: 'yi', label: '乙容器', total: '? kg',
+        segments: [
+          { id: 'yi-a', pct: 25, label: '酒精 ?', color: 'orange' },
+          { id: 'yi-w', pct: 75, label: '水 18 kg', color: 'blue' }
+        ]
+      }]
+    }
+  }).script.diagram;
+
+  const { svg } = MT.diagrams.render(spec);
+  const host = document.getElementById('host');
+  host.appendChild(svg);
+
+  const before = svg.getAttribute('viewBox');
+  let bbox = 'n/a';
+  try { const b = svg.getBBox(); bbox = `${Math.round(b.x)},${Math.round(b.y)} ${Math.round(b.width)}×${Math.round(b.height)}`; }
+  catch (e) { bbox = 'ERR ' + e.name + ': ' + e.message; }
+  const r = MT.diagrams.fit(svg, 26);
+  const after = svg.getAttribute('viewBox');
+
+  document.getElementById('log').textContent =
+    `hasFit: ${typeof MT.diagrams.fit}\n` +
+    `bbox: ${bbox}\n` +
+    `viewBox 前: ${before}\n` +
+    `viewBox 后: ${after}\n` +
+    `fit 返回: ${JSON.stringify(r)}`;
+</script>
+</body>
+</html>

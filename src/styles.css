@@ -183,6 +183,15 @@ button{font-family:inherit}
 }
 .example:hover{border-color:#FFC3A8;color:var(--brand-deep);background:var(--brand-soft)}
 
+/* 出结果后收起输入区，把高度让给图解 */
+.ask.compact{padding:10px 18px 10px}
+.ask.compact #problem{height:44px;min-height:44px;padding:10px 14px;resize:none}
+.ask.compact .ask-tools{bottom:5px}
+.ask.compact .solve{min-height:44px}
+.ask.compact .hint{display:none}
+.ask.compact .examples{display:none}
+.ask.compact .controls{margin-top:9px}
+
 /* 拍照识题 */
 .ask.dragover{border-color:#FFB392;box-shadow:0 0 0 4px rgba(255,107,53,.12)}
 .ask.dragover::after{

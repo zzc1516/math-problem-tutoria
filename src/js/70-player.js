@@ -36,6 +36,8 @@
       const { svg, reg } = MT.diagrams.render(sp);
       this.handle = { svg, reg };
       this.host.appendChild(svg);
+      // 进 DOM 之后量一次实际内容范围，再据此收紧 viewBox
+      if (MT.diagrams.fit) MT.diagrams.fit(svg, 20);
       if (swap) svg.classList.add('swap-in');
       this.svg = svg;
       this.index = -1;

@@ -510,7 +510,7 @@
     const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'dg' });
     title(svg, spec.title);
     const x0 = 196, barW = 600, h = 58;
-    const startY = spec.rows.length > 1 ? 148 : 210;
+    const startY = 130;   // 紧贴标题下方，别留一大片空白
     const rowH = 132;
 
     spec.rows.forEach((r, i) => {
@@ -543,8 +543,11 @@
     });
 
     if (spec.note) {
-      svg.appendChild(pill(W / 2 - 200, 452, 400, 38, '#FFF8F2', '#FFC9AC'));
-      svg.appendChild(text(W / 2, 477, spec.note, 'note', { fill: '#B4551F' }));
+      // 紧跟在最后一根条下面，别在画布底部留一大片空白
+      const ny = startY + spec.rows.length * rowH - 30;
+      const nw = Math.max(320, spec.note.length * 15 + 40);
+      svg.appendChild(pill(W / 2 - nw / 2, ny, nw, 38, '#FFF8F2', '#FFC9AC'));
+      svg.appendChild(text(W / 2, ny + 25, spec.note, 'note', { fill: '#B4551F' }));
     }
     return svg;
   }
@@ -657,5 +660,17 @@
     return { svg, reg };
   }
 
-  MT.diagrams = { render, COLORS: C, W, H };
+  /** 把 viewBox 收缩到内容真实范围：留白越少，同样舞台里字就越大 */
+  function fit(svg, pad) {
+    pad = pad == null ? 26 : pad;
+    let bb;
+    try { bb = svg.getBBox(); } catch (e) { return null; }
+    if (!bb || bb.width < 20 || bb.height < 20) return null;
+    const w = bb.width + pad * 2;
+    const h = bb.height + pad * 2;
+    svg.setAttribute('viewBox', `${bb.x - pad} ${bb.y - pad} ${w} ${h}`);
+    return { w, h };
+  }
+
+  MT.diagrams = { render, fit, COLORS: C, W, H };
 })();
