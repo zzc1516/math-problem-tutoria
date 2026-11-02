@@ -568,7 +568,7 @@ input[type=range]{width:100%;accent-color:var(--brand)}
 <!--
   数学图解讲解 · Math Tutor
   单文件版本，由 build.mjs 从 src/ 生成，请勿直接编辑本文件。
-  构建版本：50a4f867
+  构建版本：aeb63623
   许可：MIT
 -->
 
@@ -1215,6 +1215,22 @@ input[type=range]{width:100%;accent-color:var(--brand)}
       out.total = d.total ? { id: str(d.total.id) || 'total', label: str(d.total.label), value: str(d.total.value) } : null;
       out.unitOne = d.unitOne && str(d.unitOne.id) ? { id: str(d.unitOne.id), label: str(d.unitOne.label || '1') } : null;
       out.question = d.question ? { id: str(d.question.id) || 'q', label: str(d.question.label) } : null;
+      out.divide = !!d.divide;
+      out.groups = asArray(d.groups).slice(0, 3).map((g, i) => ({
+        id: str(g.id) || 'grp' + (i + 1),
+        span: asArray(g.span).map(str).slice(0, 6),
+        label: str(g.label),
+        color: pickColor(g.color || 'purple')
+      }));
+      out.compare = d.compare && str(d.compare.from) && str(d.compare.to)
+        ? {
+          id: str(d.compare.id) || 'cmp',
+          from: str(d.compare.from),
+          to: str(d.compare.to),
+          label: str(d.compare.label),
+          color: pickColor(d.compare.color || 'red')
+        }
+        : null;
     } else if (type === 'bars') {
       out.rows = asArray(d.rows).slice(0, 6).map((r, i) => ({
         id: str(r.id) || 'r' + (i + 1),
@@ -1421,7 +1437,14 @@ input[type=range]{width:100%;accent-color:var(--brand)}
   function collectIds(d) {
     const ids = new Set();
     const add = (x) => { if (x && x.id) ids.add(x.id); };
-    if (d.type === 'segment') { d.parts.forEach(add); if (d.total) add(d.total); if (d.unitOne) add(d.unitOne.id); if (d.question) add(d.question); }
+    if (d.type === 'segment') {
+      d.parts.forEach(add);
+      if (d.total) add(d.total);
+      if (d.unitOne) add(d.unitOne.id);
+      if (d.question) add(d.question);
+      (d.groups || []).forEach(add);
+      if (d.compare) add(d.compare);
+    }
     if (d.type === 'bars') d.rows.forEach(add);
     if (d.type === 'balance') { d.left.items.forEach(add); d.right.items.forEach(add); }
     if (d.type === 'route') { d.travelers.forEach(add); d.marks.forEach(add); }
@@ -1501,6 +1524,11 @@ input[type=range]{width:100%;accent-color:var(--brand)}
  "unitOne":{"id":"a","label":"1"},
  "question":{"id":"q","label":"一共多少元？"}}
  ratio 是这一段的份数（决定长短），颜色可选 blue/orange/green/purple/amber。
+ 还有三个可选字段，比例 / 差量类题目一定要用：
+ · "divide": true          每段按 ratio 画等分格——文字里说"切成 20 份"，图上就要有 20 格
+ · "groups": [{"id":"g1","span":["b","c"],"label":"第二天+第三天 = 14 份 = 70%"}]   跨段括号
+ · "compare": {"id":"cmp","from":"a","to":"b","label":"多 3 份 = 240 吨"}
+   在 b 段里量出 a 段那么长，剩下的那截就是差，自动画虚线和括号
 
 2. bars 份数方块图（和差倍、倍数比较：一段就是若干个方块）
 {"type":"bars","unit":"份","rows":[{"id":"r1","label":"甲","ratio":1,"value":"?"},
@@ -1603,7 +1631,10 @@ G. 认知顺序走 CPA：先具体（钱、格子、路程）→ 再图示（线
 9. 图解要服务于理解：线段图看份数，天平看等量关系，面积图看公式从哪来。
 10. 题目以图片给出时：先看清图上的数字、单位、图形标注再动笔；几何题必须按图上给的数据画图，
     并把"这个数是从图上哪里看到的"讲出来；看不清就别猜，写进 warning。
-11. meta.note 只写一句话、不超过 30 个字（会被显示在图下方的一行说明里）。`;
+11. meta.note 只写一句话、不超过 30 个字（会被显示在图下方的一行说明里）。
+12. 文字里讲到的份数、比例、差量，图上必须画出来，做不到就别在文字里讲：
+    讲"切成 20 份"→ 开 divide；讲"合起来 70%"→ 用 groups 括起来；
+    讲"比…多 240 吨"→ 用 compare 把多出的那几份标出来。`;
 
   const GRADE_RULES = `## 年级适配（meta.grade）
 一年级：只用图形和实物图，不出现分数、小数、字母、乘除算式，用「合起来 / 拿走 / 还剩」表达。
@@ -1727,7 +1758,30 @@ gradeFit：题目明显超出所选年级时填 "above"，明显低于时填 "be
 {"phase":"检验","title":"代回去看浓度","text":"甲最后 7.5 kg，酒精 4 + 0.875 = 4.875 kg，4.875 ÷ 7.5 = 65%，正好对得上。","math":"4.875 / 7.5 = 0.65","why":"浓度 = 酒精 ÷ 溶液总量，两边都要回到 65% 和 25%。","ops":[{"op":"focus","ids":["mid"]},{"op":"mark","id":"mid","text":"✓"}]}
 ],
 "answer":{"value":"3.5","unit":"千克","sentence":"第二次从乙倒了 3.5 千克溶液。"},
-"checks":["18 / 0.75 = 24","24 - 18 = 6","4 / 8 * 7 = 3.5","4.875 / 7.5 = 0.65"],"warning":""}`;
+"checks":["18 / 0.75 = 24","24 - 18 = 6","4 / 8 * 7 = 3.5","4.875 / 7.5 = 0.65"],"warning":""}
+
+### 范例 E（百分数 + 比 + 差量，用等分格，六年级）
+题目：三天运完一堆煤，第一天运走 30%，第二天比第一天多 240 吨，第二天与第三天之比是 9:5。这堆煤共多少吨？
+{"meta":{"topic":"百分数与比·求总量","grade":6,"method":"arithmetic","unit1":true,"unit1Used":true,"gradeFit":"ok","note":""},
+"problem":{"text":"三天运完一堆煤，第一天运走 30%，第二天比第一天多 240 吨，第二天与第三天之比是 9:5。这堆煤共多少吨？","givens":[{"name":"第一天","value":"30%","unit":""},{"name":"第二天比第一天多","value":"240","unit":"吨"},{"name":"第二天:第三天","value":"9:5","unit":""}],"question":"这堆煤共多少吨？"},
+"plan":{"headline":"把整堆切成 20 份","relation":"20 份 = 第一天 6 + 第二天 9 + 第三天 5"},
+"diagram":{"type":"segment","title":"一堆煤（三天运完）","divide":true,
+ "parts":[{"id":"a","ratio":6,"label":"第一天 30%","value":"? 吨","color":"blue"},
+          {"id":"b","ratio":9,"label":"第二天 45%","value":"? 吨","color":"orange"},
+          {"id":"c","ratio":5,"label":"第三天 25%","value":"? 吨","color":"green"}],
+ "total":{"id":"total","label":"整堆煤 20 份","value":"? 吨"},
+ "groups":[{"id":"g1","span":["b","c"],"label":"第二天+第三天 = 14 份 = 70%"}],
+ "compare":{"id":"cmp","from":"a","to":"b","label":"多 3 份 = 240 吨"},
+ "question":{"id":"q","label":"共多少吨？"}},
+"steps":[
+{"phase":"理解","title":"剩下的是 70%","text":"第一天运走 30%，剩下的 70% 就是第二天和第三天合起来的量。","math":"1 - 30% = 70%","why":"整堆煤是单位 1。","ops":[{"op":"focus","ids":["a"],"text":"第一天 30%"}]},
+{"phase":"关系","title":"全部化成整数份","text":"30% 是 20 份里的 6 份，剩下的 14 份按 9:5 分成 9 份和 5 份。","math":"","why":"分母取 20，百分数就变成整数份，好算也好画。","ops":[{"op":"focus","ids":["g1"],"text":"14 份 = 70%"}]},
+{"phase":"列式","title":"第二天多了 3 份","text":"第二天 9 份、第一天 6 份，多出 3 份，这 3 份正好是 240 吨。","math":"9 - 6 = 3","why":"盖住和第一天一样长的 6 份，剩下的就是多的部分。","ops":[{"op":"focus","ids":["cmp"],"text":"3 份 = 240 吨"}]},
+{"phase":"计算","title":"先求 1 份，再求整堆","text":"1 份 = 240 ÷ 3 = 80 吨，20 份就是 80 × 20 = 1600 吨。","math":"80 * 20 = 1600","why":"份数 × 每份的量 = 总量。","ops":[{"op":"set","id":"total","text":"1600 吨"},{"op":"pulse","ids":["total"]}]},
+{"phase":"检验","title":"三条都验一遍","text":"480 + 720 + 400 = 1600，720 − 480 = 240，720 : 400 = 9:5，全对。","math":"480 + 720 + 400 = 1600","why":"总量、差量、比例都要回头核对。","ops":[{"op":"mark","id":"total","text":"✓"}]}
+],
+"answer":{"value":"1600","unit":"吨","sentence":"这堆煤共 1600 吨。"},
+"checks":["9 - 6 = 3","240 / 3 = 80","80 * 20 = 1600","480 + 720 + 400 = 1600"],"warning":""}`;
   }
 
   function buildUserPrompt(opts) {
@@ -2051,6 +2105,74 @@ text 里不要用 Markdown，不要超过 90 个字。`;
     warning: ''
   };
 
+  /* 百分数 + 比 + 差量：把整体切成 20 份，用 compare 标出差 */
+  const coal = {
+    meta: { topic: '百分数与比 · 求总量', grade: 6, method: 'arithmetic', unit1: true, unit1Used: true, gradeFit: 'ok', note: '' },
+    problem: {
+      text: '一辆运煤车三天运完一堆煤，第一天运走了总量的 30%，第二天运的比第一天多 240 吨，第二天和第三天的运煤吨数之比是 9∶5。这堆煤共有多少吨？',
+      givens: [
+        { name: '第一天', value: '总量的 30%', unit: '' },
+        { name: '第二天', value: '比第一天多 240', unit: '吨' },
+        { name: '第二天 : 第三天', value: '9 : 5', unit: '' }
+      ],
+      question: '这堆煤共有多少吨？'
+    },
+    plan: { headline: '把整堆煤切成 20 份', relation: '20 份 = 第一天 6 + 第二天 9 + 第三天 5' },
+    diagram: {
+      type: 'segment', title: '一堆煤（三天运完）', divide: true,
+      parts: [
+        { id: 'a', ratio: 6, label: '第一天 30%', value: '? 吨', color: 'blue' },
+        { id: 'b', ratio: 9, label: '第二天 45%', value: '? 吨', color: 'orange' },
+        { id: 'c', ratio: 5, label: '第三天 25%', value: '? 吨', color: 'green' }
+      ],
+      total: { id: 'total', label: '整堆煤 20 份', value: '? 吨' },
+      groups: [{ id: 'g1', span: ['b', 'c'], label: '第二天+第三天 = 14 份 = 70%', color: 'purple' }],
+      compare: { id: 'cmp', from: 'a', to: 'b', label: '多 3 份 = 240 吨' },
+      question: { id: 'q', label: '这堆煤共有多少吨？' }
+    },
+    steps: [
+      {
+        phase: '理解', title: '先看第一天，剩下 70%',
+        text: '第一天运走 30%，那还剩 70%，也就是第二天和第三天合起来的部分。',
+        math: '1 - 30% = 70%', why: '整堆煤是单位 1，减去第一天就是剩下的。',
+        ops: [{ op: 'focus', ids: ['a'], text: '第一天 30%' }, { op: 'focus', ids: ['b', 'c'], text: '合起来 70%' }]
+      },
+      {
+        phase: '关系', title: '把整堆切成 20 份',
+        text: '30% 正好是 20 份里的 6 份，剩下的 14 份按 9 : 5 分成 9 份和 5 份。',
+        math: '', why: '分母取 20，30% = 6/20，70% = 14/20，全都变成整数份，好算。',
+        ops: [{ op: 'focus', ids: ['g1'], text: '14 份 = 70%' }]
+      },
+      {
+        phase: '计算', title: '第二天比第一天多几份',
+        text: '第二天 9 份，第一天 6 份，多出 3 份，这 3 份正好是 240 吨。',
+        math: '9 - 6 = 3', why: '把第二天里和第一天一样长的 6 份盖住，剩下的 3 份就是多的部分。',
+        ops: [{ op: 'focus', ids: ['cmp'], text: '3 份 = 240 吨' }]
+      },
+      {
+        phase: '计算', title: '1 份是多少',
+        text: '3 份是 240 吨，那 1 份就是 240 ÷ 3 = 80 吨。',
+        math: '240 / 3 = 80', why: '先求 1 份，最后才能求整堆。',
+        ops: [{ op: 'set', id: 'a', text: '480 吨' }, { op: 'set', id: 'b', text: '720 吨' }, { op: 'set', id: 'c', text: '400 吨' }]
+      },
+      {
+        phase: '计算', title: '整堆是多少',
+        text: '一共 20 份，每份 80 吨，20 × 80 = 1600 吨。',
+        math: '80 * 20 = 1600', why: '份数 × 每份的量 = 总量。',
+        ops: [{ op: 'set', id: 'total', text: '1600 吨' }, { op: 'pulse', ids: ['total'] }]
+      },
+      {
+        phase: '检验', title: '三个条件都验一遍',
+        text: '480 + 720 + 400 = 1600，720 − 480 = 240，720 : 400 = 9 : 5，三条都对。',
+        math: '480 + 720 + 400 = 1600', why: '总量、差量、比例都要回头核对，只验一条不够。',
+        ops: [{ op: 'mark', id: 'total', text: '✓' }, { op: 'focus', ids: ['a', 'b', 'c'] }]
+      }
+    ],
+    answer: { value: '1600', unit: '吨', sentence: '这堆煤共有 1600 吨。' },
+    checks: ['9 - 6 = 3', '240 / 3 = 80', '80 * 20 = 1600', '480 + 720 + 400 = 1600'],
+    warning: ''
+  };
+
   const examples = [
     { label: '分数 · 单位1', grade: 6, text: '小明有 48 元，小红的钱是小明的 3/4，两个人一共有多少元？' },
     { label: '和差问题', grade: 4, text: '甲、乙两盒共有 48 张卡片，甲盒比乙盒多 12 张。两盒各有多少张卡片？' },
@@ -2063,7 +2185,7 @@ text 里不要用 Markdown，不要超过 90 个字。`;
     { label: '浓度问题', grade: 6, text: solution.problem.text }
   ];
 
-  MT.demo = { lessons: [demo, discount, solution, equation], examples };
+  MT.demo = { lessons: [demo, discount, solution, equation, coal], examples };
 })();
 
 
@@ -2602,9 +2724,9 @@ ${answerMsg}
   function renderSegment(spec, reg) {
     const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'dg' });
     title(svg, spec.title);
-    const x0 = 92, totalW = 700, barY = 186, barH = 68;
+    const x0 = 92, totalW = 700, barY = 178, barH = 68;
     const sum = spec.parts.reduce((a, p) => a + p.ratio, 0) || 1;
-    const gap = 5;
+    const gap = 4;
     const usable = totalW - gap * (spec.parts.length - 1);
 
     let cursor = x0;
@@ -2619,16 +2741,13 @@ ${answerMsg}
     if (spec.total) {
       const g = s('g', { class: 'el', 'data-id': spec.total.id });
       const center = x0 + totalW / 2;
-      g.appendChild(s('text', { x: center - 34, y: 122, class: 'note', 'text-anchor': 'end' }, spec.total.label || ''));
-      const tv = s('text', { x: center + 34, y: 122, class: 'val', 'text-anchor': 'start' }, '');
+      g.appendChild(s('text', { x: center - 8, y: 96, class: 'note', 'text-anchor': 'end' }, spec.total.label || ''));
+      const tv = s('text', { x: center + 8, y: 96, class: 'val', 'text-anchor': 'start' }, spec.total.value || '');
       g.appendChild(tv);
-      g.appendChild(bracket(x0, x0 + totalW, 138, 1, '#B9C7D4'));
+      g.appendChild(bracket(x0, x0 + totalW, 112, 1, '#B9C7D4'));
       svg.appendChild(g);
       reg[spec.total.id] = g;
       g._text = tv;
-      tv.textContent = spec.total.value || '';
-      // 让 set 也能同时改 label
-      g._label = g.firstChild;
     }
 
     spans.forEach(({ x, w, p }) => {
@@ -2648,24 +2767,83 @@ ${answerMsg}
       g._text = valText;
     });
 
+    // 等分格：把每段按份数切开，"20 份"才看得见
+    if (spec.divide) {
+      const dg = s('g', { class: 'el', 'data-id': 'divide' });
+      spans.forEach(({ x, w, p }) => {
+        const n = Math.min(40, Math.round(p.ratio));
+        if (n < 2 || w / n < 7) return;
+        const c = color(p.color);
+        for (let k = 1; k < n; k++) {
+          const xx = x + (w / n) * k;
+          dg.appendChild(s('line', { x1: xx, y1: barY + 1, x2: xx, y2: barY + barH - 1, stroke: '#fff', 'stroke-width': 1.8, opacity: 0.9 }));
+          dg.appendChild(s('line', { x1: xx, y1: barY + 1, x2: xx, y2: barY + barH - 1, stroke: c.main, 'stroke-width': 1, opacity: 0.45 }));
+        }
+      });
+      svg.appendChild(dg);
+      reg.divide = dg;
+    }
+
+    let lane = barY + barH + 8;
+
+    // 比一比：在 to 段里量出 from 段那么长，剩下的那截就是差
+    if (spec.compare) {
+      const a = spans.find((sp) => sp.p.id === spec.compare.from);
+      const b = spans.find((sp) => sp.p.id === spec.compare.to);
+      if (a && b) {
+        const cut = b.x + a.w;
+        const c = color(spec.compare.color || 'red');
+        const g = s('g', { class: 'el', 'data-id': spec.compare.id });
+        g.appendChild(s('rect', { x: b.x + 1, y: barY + 2, width: Math.min(a.w, b.w) - 2, height: barH - 4, rx: 6, fill: '#fff', opacity: 0.32 }));
+        g.appendChild(s('line', { x1: cut, y1: barY - 6, x2: cut, y2: barY + barH + 6, stroke: c.main, 'stroke-width': 2, 'stroke-dasharray': '6 5' }));
+        g.appendChild(bracket(cut, b.x + b.w, lane, -1, c.main));
+        const labelT = text((cut + b.x + b.w) / 2, lane + 26, spec.compare.label || '', 'lbl', { fill: c.deep, 'font-size': 13.5 });
+        g.appendChild(labelT);
+        g._text = labelT;
+        svg.appendChild(g);
+        reg[spec.compare.id] = g;
+        lane += 46;
+      }
+    }
+
+    // 跨段括号：例如"第二天 + 第三天 = 70%"
+    (spec.groups || []).forEach((gr) => {
+      const ss = (gr.span || []).map((id) => spans.find((sp) => sp.p.id === id)).filter(Boolean);
+      if (!ss.length) return;
+      const left = ss[0].x;
+      const last = ss[ss.length - 1];
+      const right = last.x + last.w;
+      const c = color(gr.color || 'purple');
+      const g = s('g', { class: 'el', 'data-id': gr.id });
+      g.appendChild(bracket(left + 1, right - 1, lane, -1, c.main));
+      const labelT = text((left + right) / 2, lane + 26, gr.label || '', 'lbl', { fill: c.deep, 'font-size': 13.5 });
+      g.appendChild(labelT);
+      g._text = labelT;
+      svg.appendChild(g);
+      reg[gr.id] = g;
+      lane += 46;
+    });
+
     // 单位 1
     if (spec.unitOne) {
       const sp = spans.find((x) => x.p.id === spec.unitOne.id);
       if (sp) {
         const g = s('g', { class: 'el', 'data-id': spec.unitOne.id + '__u1' });
-        g.appendChild(bracket(sp.x + 2, sp.x + sp.w - 2, barY + barH + 16, -1, C.orange.main));
-        g.appendChild(text(sp.x + sp.w / 2, barY + barH + 44, spec.unitOne.label || '1', 'lbl', { fill: C.orange.deep, 'font-size': 15 }));
+        g.appendChild(bracket(sp.x + 2, sp.x + sp.w - 2, lane, -1, C.orange.main));
+        g.appendChild(text(sp.x + sp.w / 2, lane + 26, spec.unitOne.label || '1', 'lbl', { fill: C.orange.deep, 'font-size': 15 }));
         svg.appendChild(g);
         reg[spec.unitOne.id + '__u1'] = g;
+        lane += 46;
       }
     }
 
     // 问题
     if (spec.question && spec.question.label) {
-      const qw = Math.max(150, spec.question.label.length * 15 + 40);
+      const qw = Math.max(150, spec.question.label.length * 15 + 42);
+      const qy = Math.max(lane + 16, 352);
       const g = s('g', { class: 'el', 'data-id': spec.question.id });
-      g.appendChild(pill(W / 2 - qw / 2, 352, qw, 42, '#FFF8F2', '#FFC9AC'));
-      g.appendChild(text(W / 2, 379, spec.question.label, 'lbl', { fill: '#B4551F' }));
+      g.appendChild(pill(W / 2 - qw / 2, qy, qw, 42, '#FFF8F2', '#FFC9AC'));
+      g.appendChild(text(W / 2, qy + 27, spec.question.label, 'lbl', { fill: '#B4551F' }));
       svg.appendChild(g);
       reg[spec.question.id] = g;
     }

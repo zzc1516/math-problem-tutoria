@@ -254,6 +254,74 @@
     warning: ''
   };
 
+  /* 百分数 + 比 + 差量：把整体切成 20 份，用 compare 标出差 */
+  const coal = {
+    meta: { topic: '百分数与比 · 求总量', grade: 6, method: 'arithmetic', unit1: true, unit1Used: true, gradeFit: 'ok', note: '' },
+    problem: {
+      text: '一辆运煤车三天运完一堆煤，第一天运走了总量的 30%，第二天运的比第一天多 240 吨，第二天和第三天的运煤吨数之比是 9∶5。这堆煤共有多少吨？',
+      givens: [
+        { name: '第一天', value: '总量的 30%', unit: '' },
+        { name: '第二天', value: '比第一天多 240', unit: '吨' },
+        { name: '第二天 : 第三天', value: '9 : 5', unit: '' }
+      ],
+      question: '这堆煤共有多少吨？'
+    },
+    plan: { headline: '把整堆煤切成 20 份', relation: '20 份 = 第一天 6 + 第二天 9 + 第三天 5' },
+    diagram: {
+      type: 'segment', title: '一堆煤（三天运完）', divide: true,
+      parts: [
+        { id: 'a', ratio: 6, label: '第一天 30%', value: '? 吨', color: 'blue' },
+        { id: 'b', ratio: 9, label: '第二天 45%', value: '? 吨', color: 'orange' },
+        { id: 'c', ratio: 5, label: '第三天 25%', value: '? 吨', color: 'green' }
+      ],
+      total: { id: 'total', label: '整堆煤 20 份', value: '? 吨' },
+      groups: [{ id: 'g1', span: ['b', 'c'], label: '第二天+第三天 = 14 份 = 70%', color: 'purple' }],
+      compare: { id: 'cmp', from: 'a', to: 'b', label: '多 3 份 = 240 吨' },
+      question: { id: 'q', label: '这堆煤共有多少吨？' }
+    },
+    steps: [
+      {
+        phase: '理解', title: '先看第一天，剩下 70%',
+        text: '第一天运走 30%，那还剩 70%，也就是第二天和第三天合起来的部分。',
+        math: '1 - 30% = 70%', why: '整堆煤是单位 1，减去第一天就是剩下的。',
+        ops: [{ op: 'focus', ids: ['a'], text: '第一天 30%' }, { op: 'focus', ids: ['b', 'c'], text: '合起来 70%' }]
+      },
+      {
+        phase: '关系', title: '把整堆切成 20 份',
+        text: '30% 正好是 20 份里的 6 份，剩下的 14 份按 9 : 5 分成 9 份和 5 份。',
+        math: '', why: '分母取 20，30% = 6/20，70% = 14/20，全都变成整数份，好算。',
+        ops: [{ op: 'focus', ids: ['g1'], text: '14 份 = 70%' }]
+      },
+      {
+        phase: '计算', title: '第二天比第一天多几份',
+        text: '第二天 9 份，第一天 6 份，多出 3 份，这 3 份正好是 240 吨。',
+        math: '9 - 6 = 3', why: '把第二天里和第一天一样长的 6 份盖住，剩下的 3 份就是多的部分。',
+        ops: [{ op: 'focus', ids: ['cmp'], text: '3 份 = 240 吨' }]
+      },
+      {
+        phase: '计算', title: '1 份是多少',
+        text: '3 份是 240 吨，那 1 份就是 240 ÷ 3 = 80 吨。',
+        math: '240 / 3 = 80', why: '先求 1 份，最后才能求整堆。',
+        ops: [{ op: 'set', id: 'a', text: '480 吨' }, { op: 'set', id: 'b', text: '720 吨' }, { op: 'set', id: 'c', text: '400 吨' }]
+      },
+      {
+        phase: '计算', title: '整堆是多少',
+        text: '一共 20 份，每份 80 吨，20 × 80 = 1600 吨。',
+        math: '80 * 20 = 1600', why: '份数 × 每份的量 = 总量。',
+        ops: [{ op: 'set', id: 'total', text: '1600 吨' }, { op: 'pulse', ids: ['total'] }]
+      },
+      {
+        phase: '检验', title: '三个条件都验一遍',
+        text: '480 + 720 + 400 = 1600，720 − 480 = 240，720 : 400 = 9 : 5，三条都对。',
+        math: '480 + 720 + 400 = 1600', why: '总量、差量、比例都要回头核对，只验一条不够。',
+        ops: [{ op: 'mark', id: 'total', text: '✓' }, { op: 'focus', ids: ['a', 'b', 'c'] }]
+      }
+    ],
+    answer: { value: '1600', unit: '吨', sentence: '这堆煤共有 1600 吨。' },
+    checks: ['9 - 6 = 3', '240 / 3 = 80', '80 * 20 = 1600', '480 + 720 + 400 = 1600'],
+    warning: ''
+  };
+
   const examples = [
     { label: '分数 · 单位1', grade: 6, text: '小明有 48 元，小红的钱是小明的 3/4，两个人一共有多少元？' },
     { label: '和差问题', grade: 4, text: '甲、乙两盒共有 48 张卡片，甲盒比乙盒多 12 张。两盒各有多少张卡片？' },
@@ -266,5 +334,5 @@
     { label: '浓度问题', grade: 6, text: solution.problem.text }
   ];
 
-  MT.demo = { lessons: [demo, discount, solution, equation], examples };
+  MT.demo = { lessons: [demo, discount, solution, equation, coal], examples };
 })();

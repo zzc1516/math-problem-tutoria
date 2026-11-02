@@ -85,7 +85,7 @@ for (let i = 0; i < sys.length; i++) {
     i = j;
   }
 }
-ok('找到 4 个范例', blocks.length === 4, '实际 ' + blocks.length);
+ok('找到 5 个范例', blocks.length === 5, '实际 ' + blocks.length);
 
 blocks.forEach((b, i) => {
   let parsed;

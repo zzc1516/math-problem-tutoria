@@ -47,6 +47,22 @@
       out.total = d.total ? { id: str(d.total.id) || 'total', label: str(d.total.label), value: str(d.total.value) } : null;
       out.unitOne = d.unitOne && str(d.unitOne.id) ? { id: str(d.unitOne.id), label: str(d.unitOne.label || '1') } : null;
       out.question = d.question ? { id: str(d.question.id) || 'q', label: str(d.question.label) } : null;
+      out.divide = !!d.divide;
+      out.groups = asArray(d.groups).slice(0, 3).map((g, i) => ({
+        id: str(g.id) || 'grp' + (i + 1),
+        span: asArray(g.span).map(str).slice(0, 6),
+        label: str(g.label),
+        color: pickColor(g.color || 'purple')
+      }));
+      out.compare = d.compare && str(d.compare.from) && str(d.compare.to)
+        ? {
+          id: str(d.compare.id) || 'cmp',
+          from: str(d.compare.from),
+          to: str(d.compare.to),
+          label: str(d.compare.label),
+          color: pickColor(d.compare.color || 'red')
+        }
+        : null;
     } else if (type === 'bars') {
       out.rows = asArray(d.rows).slice(0, 6).map((r, i) => ({
         id: str(r.id) || 'r' + (i + 1),
@@ -253,7 +269,14 @@
   function collectIds(d) {
     const ids = new Set();
     const add = (x) => { if (x && x.id) ids.add(x.id); };
-    if (d.type === 'segment') { d.parts.forEach(add); if (d.total) add(d.total); if (d.unitOne) add(d.unitOne.id); if (d.question) add(d.question); }
+    if (d.type === 'segment') {
+      d.parts.forEach(add);
+      if (d.total) add(d.total);
+      if (d.unitOne) add(d.unitOne.id);
+      if (d.question) add(d.question);
+      (d.groups || []).forEach(add);
+      if (d.compare) add(d.compare);
+    }
     if (d.type === 'bars') d.rows.forEach(add);
     if (d.type === 'balance') { d.left.items.forEach(add); d.right.items.forEach(add); }
     if (d.type === 'route') { d.travelers.forEach(add); d.marks.forEach(add); }

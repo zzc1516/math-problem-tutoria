@@ -59,9 +59,9 @@
   function renderSegment(spec, reg) {
     const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'dg' });
     title(svg, spec.title);
-    const x0 = 92, totalW = 700, barY = 186, barH = 68;
+    const x0 = 92, totalW = 700, barY = 178, barH = 68;
     const sum = spec.parts.reduce((a, p) => a + p.ratio, 0) || 1;
-    const gap = 5;
+    const gap = 4;
     const usable = totalW - gap * (spec.parts.length - 1);
 
     let cursor = x0;
@@ -76,16 +76,13 @@
     if (spec.total) {
       const g = s('g', { class: 'el', 'data-id': spec.total.id });
       const center = x0 + totalW / 2;
-      g.appendChild(s('text', { x: center - 34, y: 122, class: 'note', 'text-anchor': 'end' }, spec.total.label || ''));
-      const tv = s('text', { x: center + 34, y: 122, class: 'val', 'text-anchor': 'start' }, '');
+      g.appendChild(s('text', { x: center - 8, y: 96, class: 'note', 'text-anchor': 'end' }, spec.total.label || ''));
+      const tv = s('text', { x: center + 8, y: 96, class: 'val', 'text-anchor': 'start' }, spec.total.value || '');
       g.appendChild(tv);
-      g.appendChild(bracket(x0, x0 + totalW, 138, 1, '#B9C7D4'));
+      g.appendChild(bracket(x0, x0 + totalW, 112, 1, '#B9C7D4'));
       svg.appendChild(g);
       reg[spec.total.id] = g;
       g._text = tv;
-      tv.textContent = spec.total.value || '';
-      // 让 set 也能同时改 label
-      g._label = g.firstChild;
     }
 
     spans.forEach(({ x, w, p }) => {
@@ -105,24 +102,83 @@
       g._text = valText;
     });
 
+    // 等分格：把每段按份数切开，"20 份"才看得见
+    if (spec.divide) {
+      const dg = s('g', { class: 'el', 'data-id': 'divide' });
+      spans.forEach(({ x, w, p }) => {
+        const n = Math.min(40, Math.round(p.ratio));
+        if (n < 2 || w / n < 7) return;
+        const c = color(p.color);
+        for (let k = 1; k < n; k++) {
+          const xx = x + (w / n) * k;
+          dg.appendChild(s('line', { x1: xx, y1: barY + 1, x2: xx, y2: barY + barH - 1, stroke: '#fff', 'stroke-width': 1.8, opacity: 0.9 }));
+          dg.appendChild(s('line', { x1: xx, y1: barY + 1, x2: xx, y2: barY + barH - 1, stroke: c.main, 'stroke-width': 1, opacity: 0.45 }));
+        }
+      });
+      svg.appendChild(dg);
+      reg.divide = dg;
+    }
+
+    let lane = barY + barH + 8;
+
+    // 比一比：在 to 段里量出 from 段那么长，剩下的那截就是差
+    if (spec.compare) {
+      const a = spans.find((sp) => sp.p.id === spec.compare.from);
+      const b = spans.find((sp) => sp.p.id === spec.compare.to);
+      if (a && b) {
+        const cut = b.x + a.w;
+        const c = color(spec.compare.color || 'red');
+        const g = s('g', { class: 'el', 'data-id': spec.compare.id });
+        g.appendChild(s('rect', { x: b.x + 1, y: barY + 2, width: Math.min(a.w, b.w) - 2, height: barH - 4, rx: 6, fill: '#fff', opacity: 0.32 }));
+        g.appendChild(s('line', { x1: cut, y1: barY - 6, x2: cut, y2: barY + barH + 6, stroke: c.main, 'stroke-width': 2, 'stroke-dasharray': '6 5' }));
+        g.appendChild(bracket(cut, b.x + b.w, lane, -1, c.main));
+        const labelT = text((cut + b.x + b.w) / 2, lane + 26, spec.compare.label || '', 'lbl', { fill: c.deep, 'font-size': 13.5 });
+        g.appendChild(labelT);
+        g._text = labelT;
+        svg.appendChild(g);
+        reg[spec.compare.id] = g;
+        lane += 46;
+      }
+    }
+
+    // 跨段括号：例如"第二天 + 第三天 = 70%"
+    (spec.groups || []).forEach((gr) => {
+      const ss = (gr.span || []).map((id) => spans.find((sp) => sp.p.id === id)).filter(Boolean);
+      if (!ss.length) return;
+      const left = ss[0].x;
+      const last = ss[ss.length - 1];
+      const right = last.x + last.w;
+      const c = color(gr.color || 'purple');
+      const g = s('g', { class: 'el', 'data-id': gr.id });
+      g.appendChild(bracket(left + 1, right - 1, lane, -1, c.main));
+      const labelT = text((left + right) / 2, lane + 26, gr.label || '', 'lbl', { fill: c.deep, 'font-size': 13.5 });
+      g.appendChild(labelT);
+      g._text = labelT;
+      svg.appendChild(g);
+      reg[gr.id] = g;
+      lane += 46;
+    });
+
     // 单位 1
     if (spec.unitOne) {
       const sp = spans.find((x) => x.p.id === spec.unitOne.id);
       if (sp) {
         const g = s('g', { class: 'el', 'data-id': spec.unitOne.id + '__u1' });
-        g.appendChild(bracket(sp.x + 2, sp.x + sp.w - 2, barY + barH + 16, -1, C.orange.main));
-        g.appendChild(text(sp.x + sp.w / 2, barY + barH + 44, spec.unitOne.label || '1', 'lbl', { fill: C.orange.deep, 'font-size': 15 }));
+        g.appendChild(bracket(sp.x + 2, sp.x + sp.w - 2, lane, -1, C.orange.main));
+        g.appendChild(text(sp.x + sp.w / 2, lane + 26, spec.unitOne.label || '1', 'lbl', { fill: C.orange.deep, 'font-size': 15 }));
         svg.appendChild(g);
         reg[spec.unitOne.id + '__u1'] = g;
+        lane += 46;
       }
     }
 
     // 问题
     if (spec.question && spec.question.label) {
-      const qw = Math.max(150, spec.question.label.length * 15 + 40);
+      const qw = Math.max(150, spec.question.label.length * 15 + 42);
+      const qy = Math.max(lane + 16, 352);
       const g = s('g', { class: 'el', 'data-id': spec.question.id });
-      g.appendChild(pill(W / 2 - qw / 2, 352, qw, 42, '#FFF8F2', '#FFC9AC'));
-      g.appendChild(text(W / 2, 379, spec.question.label, 'lbl', { fill: '#B4551F' }));
+      g.appendChild(pill(W / 2 - qw / 2, qy, qw, 42, '#FFF8F2', '#FFC9AC'));
+      g.appendChild(text(W / 2, qy + 27, spec.question.label, 'lbl', { fill: '#B4551F' }));
       svg.appendChild(g);
       reg[spec.question.id] = g;
     }
